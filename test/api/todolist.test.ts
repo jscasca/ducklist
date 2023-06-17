@@ -67,7 +67,7 @@ before('Connect to the DB', async () => {
 after('Disconnect', () => {
   disconnect();
 });
-describe('Basic shopping list endpoint', () => {
+describe('Basic todo list endpoint', () => {
 
   describe('Creating a new list', () => {
     it('Should fail for missing parameters', (done) => {

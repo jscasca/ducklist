@@ -132,6 +132,26 @@ export interface FinishedShoppingList {
   items: FinishedListItem[];
 }
 
+export interface FinishedTodoList {
+  name: string;
+  users: User[]
+  details?: any;
+  items: FinishedListItem[];
+  _id?: ObjectId;
+}
+
+export interface FinishedListDetails {
+  finished: {
+    archive: string | undefined;
+    checked: number;
+    pending: number;
+  },
+  carryover?: {
+    list: string;
+    items: number;
+  }
+}
+
 export interface FinishedListItem {
   name: string;
   status: 'deleted' | 'checked' | 'pending' | 'unknown';

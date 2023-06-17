@@ -4,7 +4,7 @@ import * as TE from "fp-ts/lib/TaskEither";
 import { ObjectId } from "mongodb";
 import { ElementNotFoundException, UserAccessException, ValidationError } from "../exceptions";
 import { HttpError, internalError, notFound, userAccess, validationError } from "../httpError";
-import { List, ShoppingList, ShoppingListItem, TodoList, TodoListItem, User, UserToken } from "../types";
+import { FinishedListDetails, FinishedTodoList, List, ShoppingList, ShoppingListItem, TodoList, TodoListItem, User, UserToken } from "../types";
 
 const UserModel = require('../models/user');
 const ListInviteModel = require('../models/listInvite');
@@ -13,7 +13,7 @@ const EmailLoginModel = require('../models/mailLogin');
 const UserSettingsModel = require('../models/userSettings');
 const ShoppingListModel = require('../models/shoppingList');
 const ShoppingListItemModel = require('../models/shoppingListItem');
-const FinishedListModel = require('../models/finishedShoppingList');
+const FinishedListModel = require('../models/finishedTodoList');
 
 
 const TodoListModel = require('../models/todoList');
@@ -431,16 +431,30 @@ const upName = (s: string) => {
   return s + run;
 };
 
-export async function finishList(user: UserToken, list_id: string, opts: any) {
-  console.log('finishing list: ', list_id);
-  //
-  // const list = await ShoppingListModel.findById(list_id);
-  const list = await getListForUser(list_id, user);
-  const items: ShoppingListItem[] = await ShoppingListItemModel.find({list_id: list._id});
+const carryOverList = async (list: TodoList) => {
+  // create a new list and add items
+  const newList = await TodoListModel.create({
+    name: upName(list.name),
+    shared: list.shared
+  });
+  // change list items
+  const updated = await TodoListItemModel.updateMany(
+    { list_id: list._id, status: 'pending' }, // filter
+    { $set: { list_id: newList._id } }, // update
+    {} // options
+  );
 
-  // console.log('saving list');
-  items.forEach(i => console.log(JSON.stringify(i)));
-  const saved = await FinishedListModel.create({
+  return {
+    items: updated.modifiedCount,
+    list: newList._id
+  }
+};
+
+const finishFn = async (list: TodoList, opts: any): Promise<FinishedListDetails> => {
+  const items: TodoListItem[] = await TodoListItemModel.find({ list_id: list._id});
+  const pending = items.filter(i => i.status === 'pending');
+  // Finished and archived list
+  const finishedList: FinishedTodoList = await FinishedListModel.create({
     name: list.name,
     users: list.shared,
     items: items.map((item: ShoppingListItem) => ({
@@ -451,34 +465,50 @@ export async function finishList(user: UserToken, list_id: string, opts: any) {
     }))
   });
 
-  const pending = items.filter(i => i.status === 'pending');
-  if (pending.length > 0 && opts.pending === true) {
-    // create a new list with the pending items
-    const newList = await ShoppingListModel.create({
-      name: upName(list.name),
-      shared: list.shared
-    });
-    // change list items
-    const changedItems = await ShoppingListItemModel.updateMany(
-      { list_id: list._id, status: 'pending' }, // filter
-      { $set: { list_id: newList._id } }, // update
-      {} // options
-    );
+  let carryOver = {};
+
+  if (opts.carryover && pending.length > 0) {
+    // Create a new list with the pending items
+    carryOver = carryOverList(list);
   }
   const removedItems = await ShoppingListItemModel.deleteMany({list_id: list._id});
   const removedList = await ShoppingListModel.findByIdAndDelete(list._id);
-  return saved;
-  //
+  return {
+    finished: {
+      archive: finishedList._id?.toString(),
+      checked: items.filter(i => i.status === 'checked').length,
+      pending: pending.length
+    },
+    ...carryOver
+  };
 };
 
-/*
-export interface FinishedListItem {
-  name: string;
-  status: 'deleted' | 'checked' | 'pending' | 'unknown';
-  notes: any;
-  details: ShoppingListItemDetails;
-}
-*/
+export const finish = (user: UserToken, listId: string, opts: any = {}): TE.TaskEither<HttpError, FinishedListDetails> => {
+  return pipe(
+    getList(user, listId),
+    TE.chain(list => TE.tryCatch(
+      () => finishFn(list, opts),
+      (reason) => internalError()
+    ))
+  );
+};
+
+const removeListAndItems = async (listId: ObjectId | undefined) => {
+  await TodoListItemModel.deleteMany({list_id: listId});
+  await TodoListModel.findByIdAndDelete(listId);
+  return true;
+};
+
+const removeUserFromList = async (listId: ObjectId | undefined, userId: string) => {
+  // const updatedList = await ShoppingListModel.findByIdAndUpdate(list._id, {
+  //   $set: {shared: list.shared.filter((s: any) => s.toString() !== user.user_id).map((user: User) => user._id)}
+  // }, { new: true});
+  // {new: true} ensure we get the updated object
+  await TodoListModel.findByIdAndUpdate(listId, {
+    $pull: {shared: userId}
+  });
+  return true;
+};
 
 export const removeList = (user: UserToken, listId: string, forEveryone: boolean = false): TE.TaskEither<HttpError, boolean> => {
   return pipe(
@@ -486,52 +516,18 @@ export const removeList = (user: UserToken, listId: string, forEveryone: boolean
     TE.chain(list => {
       if (list.shared.length === 1 || forEveryone) {
         // delete and remove
-      } else {
-        // delete for myself only (i.e. delete my access, i.e. remove myself from the shared)
+        return TE.tryCatch(
+          () => removeListAndItems(list._id),
+          (reason) => internalError()
+        );
       }
-      return TE.right(true)
+      return TE.tryCatch(
+        () => removeUserFromList(list._id, user.user_id),
+        (reason) => internalError()
+      );
     })
   )
 }
-
-export async function removeList(user: UserToken, list_id: string) {
-  // Remove yourself from the list of shared users, if you are the last one, delete the list alltogether
-  let list: ShoppingList;
-  try{
-    list = await ShoppingListModel.findById(list_id);
-  } catch(e) {
-    throw new ElementNotFoundException(`List:${list_id}`);
-  }
-  // const list = await ShoppingListModel.find({shared: new ObjectId(user.user_id), _id: new ObjectId(listId)});
-  if(!list) {
-    throw new ElementNotFoundException(`List:${list_id}`);
-  }
-  // Check if user has access
-  if(!list.shared.some((u) => u._id?.toString() === user.user_id)) {
-    throw new UserAccessException("List access");
-  }
-  // if (list.shared.length === 1) {
-  //   console.log('not-shared owned?: ', list.shared[0], user.user_id, list.shared[0]._id?.toString() === user.user_id);
-  //   // TBD remove frmo list
-  // }
-  if (list.shared.length === 1 && list.shared[0]._id?.toString() === user.user_id) {
-    // you are the last one, remove the list and all instances
-    const removedItems = await ShoppingListItemModel.deleteMany({list_id: list._id});
-    // console.log('removed items: ', removedItems);
-    const removedList = await ShoppingListModel.findByIdAndDelete(list._id);
-    // console.log('removed list before merging: ', removedList.toObject());
-    // removedList.count = removedItems;
-    // console.log('removed list: ', { count: removedItems.deletedCount, ...removedList.toObject()} );
-    return { count: removedItems.deletedCount, ...removedList.toObject()};
-  } else {
-    // remove only yourself from the list
-    const updatedList = await ShoppingListModel.findByIdAndUpdate(list._id, {
-      $set: {shared: list.shared.filter((s: any) => s.toString() !== user.user_id).map((user: User) => user._id)}
-    }, { new: true});
-    return updatedList;
-  }
-};
-// {new: true} ensure we get the updated object
 
 export async function acceptInvite(user: UserToken, invite_id: string) {
   //
