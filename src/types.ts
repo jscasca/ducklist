@@ -85,7 +85,8 @@ export interface TodoList {
   name: string;
   shared: User[]; // array of user_id of shared users
   invited: any[];
-  details: any // TODO: Update this object;
+  meta?: any;
+  details: any; // TODO: Update this object;
   _id?: ObjectId;
 }
 

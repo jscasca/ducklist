@@ -80,17 +80,15 @@ router.post('/', verifyToken, (req, res) => {
   router.post('/:id', verifyToken, (req, res) => {
     const user = (req as any).user;
     console.log('updating existing');
-    const list_id = req.params.id;
-    const { name, meta } = req.body;
-    if (!(list_id && (name || meta))) {
-      return res.status(400).send('Missing parameters');
-    }
-    updateList(user, list_id, name, meta).then((listing) => {
-      res.status(200).json(listing);
-    }).catch((e) => {
-      console.log(e);
-      handleException(res, e, () => false);
-    });
+    const listId = req.params.id;
+    const { updates } = req.body;
+    pipe(
+      updateList(user, listId, updates),
+      TE.fold(
+        (e: HttpError) => T.of( res.status(e.code()).send(e.message()) ),
+        (list: TodoList) => T.of(res.status(200).json(list))
+      )
+    )();
   });
 
   // TO-DO

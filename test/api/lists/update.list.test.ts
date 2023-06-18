@@ -91,7 +91,7 @@ describe('Updating lists', () => {
       request(app)
         .post(`/lists/wrongid`)
         .set('x-access-token', userAlice.token)
-        .send({name: 'test', sharedWith: []})
+        .send({updates: {}})
         .expect(404)
         .end((err) => {
           if(err) return done(err);
@@ -103,7 +103,7 @@ describe('Updating lists', () => {
       request(app)
         .post(`/lists/${listA._id}`)
         .set('x-access-token', userCharlie.token)
-        .send({name: 'Updated name', sharedWith: [userAlice.user_id as string, userBob.user_id as string]})
+        .send({updates: {}})
         .expect(403)
         .end((err) => {
           if(err) return done(err);
@@ -117,11 +117,11 @@ describe('Updating lists', () => {
       request(app)
       .post(`/lists/${listA._id}`)
       .set('x-access-token', userAlice.token)
-      .send({name: 'list b', sharedWith: [userAlice.user_id as string, userBob.user_id as string]})
+      .send({updates: {name: 'Updated'}})
       .expect(200)
       .end((_, res) => {
         expect(res.body).to.have.deep.property('_id', listA._id?.toString());
-        expect(res.body).to.have.deep.property('name');
+        expect(res.body).to.have.deep.property('name', 'Updated');
         // expect(res.body).to.have.deep.property('invited');
         // expect(res.body.invited.some((i: any) => i._id === userBob.user_id.toString())).to.be.true;
         done();

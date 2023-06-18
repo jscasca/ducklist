@@ -1,6 +1,7 @@
 import * as E from "fp-ts/lib/Either";
 import { pipe } from "fp-ts/lib/function";
 import * as TE from "fp-ts/lib/TaskEither";
+import * as T from "fp-ts/lib/Task";
 import { ObjectId } from "mongodb";
 import { ElementNotFoundException, UserAccessException, ValidationError } from "../exceptions";
 import { HttpError, internalError, notFound, userAccess, validationError } from "../httpError";
@@ -255,24 +256,36 @@ async function inviteByMail(user: UserToken, list: ShoppingList, invitedMail: st
 
 // TODO: Update List in smaller modules
 
-// TODO: Update more modular
-export async function updateList(user: UserToken, listId: string, name: string, meta: any) {
-  //
-  const list = await ShoppingListModel.find({shared: new ObjectId(user.user_id), _id: new ObjectId(listId)});
-  if (!list) {
-    throw new UserAccessException('List not shared with user');
+const mapUpdateValues = (values: Record<string, any>): Record<string, any> => {
+  let updates = {}
+  if (values.name) {
+    updates = {$set: {name: values.name}}
   }
-  // Check name and meta against current to see what to update
-  const updatedList = await ShoppingListModel.findByIdAndUpdate(listId, {
-    $set: {
-      name,
-      // shared: shared.map((s) => new ObjectId(s))
-    }
-  }, { new: true }).populate('shared');
-  /*
-  use {overwrite: true} as 3rd argument or $set: {name, shared} to ensure values are saved
-  */
-  return updatedList;
+  return updates;
+}
+
+const updateFn = async (list: TodoList, values: Record<string, string>): Promise<TodoList> => {
+  const updates = mapUpdateValues(values);
+  console.log('Updating List with values: ', updates);
+  const updated = await TodoListModel.findByIdAndUpdate(list._id, updates, { new: true }).populate('shared');
+  return updated;
+};
+
+const validateUpdates = (values: any): TE.TaskEither<HttpError, Record<string, string>> => {
+  if (!values) return TE.left(validationError());
+  return TE.right(values as Record<string, string>);
+}
+
+export const updateList = (user: UserToken, listId: string, values: Record<string, string>): TE.TaskEither<HttpError, TodoList> => {
+  return pipe(
+    validateUpdates(values),
+    TE.bindTo('updates'),
+    TE.bind('list', () => getList(user, listId)),
+    TE.chain(({updates, list}) => TE.tryCatch(
+      () => updateFn(list, updates),
+      (reason) => internalError()
+    ))
+  );
 };
 
 const getItems = (list: TodoList): TE.TaskEither<HttpError, TodoListItem[]> => {
@@ -450,13 +463,17 @@ const carryOverList = async (list: TodoList) => {
   }
 };
 
-const finishFn = async (list: TodoList, opts: any): Promise<FinishedListDetails> => {
+const finishFn = async (list: TodoList, user: UserToken, opts: any): Promise<FinishedListDetails> => {
   const items: TodoListItem[] = await TodoListItemModel.find({ list_id: list._id});
   const pending = items.filter(i => i.status === 'pending');
   // Finished and archived list
   const finishedList: FinishedTodoList = await FinishedListModel.create({
     name: list.name,
     users: list.shared,
+    details: {
+      finishedOn: Date.now(),
+      finishedBy: user.user_id
+    },
     items: items.map((item: ShoppingListItem) => ({
       name: item.name,
       status: item.status,
@@ -483,11 +500,11 @@ const finishFn = async (list: TodoList, opts: any): Promise<FinishedListDetails>
   };
 };
 
-export const finish = (user: UserToken, listId: string, opts: any = {}): TE.TaskEither<HttpError, FinishedListDetails> => {
+export const finishList = (user: UserToken, listId: string, opts: any = {}): TE.TaskEither<HttpError, FinishedListDetails> => {
   return pipe(
     getList(user, listId),
     TE.chain(list => TE.tryCatch(
-      () => finishFn(list, opts),
+      () => finishFn(list, user, opts),
       (reason) => internalError()
     ))
   );
