@@ -48,7 +48,7 @@ export const newList = (user: UserToken, name: string, shared: string[]): TE.Tas
       name,
       shared: shared.map((s) => new ObjectId(s)),
       details: {
-        createdBy: user.user_id
+        createdBy: new ObjectId(user.user_id)
       }
     }) as Promise<TodoList>,
     (reason) => internalError()
@@ -300,12 +300,6 @@ export async function getListItems(user: UserToken, listId: string) {
     getList(user, listId),
     TE.chain(list => getItems(list))
   );
-  // const list = await ShoppingListModel.find({shared: new ObjectId(user.user_id), _id: new ObjectId(listId)});
-  // if (!list) {
-  //   throw new UserAccessException('List not shared with user');
-  // }
-  // const listItems = await ShoppingListItemModel.find({list_id: listId});
-  // return listItems;
 };
 
 const addItemFn = (user: UserToken, newItem: any) => {
@@ -327,10 +321,17 @@ const addItemFn = (user: UserToken, newItem: any) => {
   };
 };
 
+const validateNewItem = (newItem: any): TE.TaskEither<HttpError, Record<string, string>> => {
+  //
+  return TE.left(validationError());
+};
+
 export const addListItem = (user: UserToken, listId: string, newItem: any): TE.TaskEither<HttpError, TodoListItem> => {
   //
   return pipe(
-    getList(user, listId),
+    validateNewItem(newItem),
+    TE.bindTo('item'),
+    TE.bind('list', () => getList(user, listId)),
     TE.chain(list => addItemFn(user, newItem)(list))
   );
   // const timestamp = Date.now();
@@ -472,7 +473,7 @@ const finishFn = async (list: TodoList, user: UserToken, opts: any): Promise<Fin
     users: list.shared,
     details: {
       finishedOn: Date.now(),
-      finishedBy: user.user_id
+      finishedBy: new ObjectId(user.user_id)
     },
     items: items.map((item: ShoppingListItem) => ({
       name: item.name,

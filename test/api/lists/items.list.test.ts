@@ -5,9 +5,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import app from '../../../src/index';
+import { pipe } from "fp-ts/lib/function";
+import * as T from "fp-ts/lib/Task";
+import * as TE from "fp-ts/lib/TaskEither";
 import { registerUserByMail } from '../../../src/middleware/engine';
 import { addListItem, newList, isEmail } from '../../../src/middleware/lists';
-import { ShoppingList, ShoppingListItem, UserToken } from '../../../src/types';
+import { ShoppingList, ShoppingListItem, TodoList, UserToken } from '../../../src/types';
 import { ObjectId } from 'mongodb';
 
 import { getUserFromToken } from '../../authUtil';
@@ -26,10 +29,22 @@ let userCharlie: { token: any; user_id?: any | undefined; name?: string; icon?: 
 
 let privateUser: any;
 
-let listA: ShoppingList;
+let listA: TodoList;
 let basicItem: any;
 
 const invitedByMail = "invitedWithOutAccount@test.com";
+
+const EMPTY_LIST: TodoList = {
+  name: '',
+  shared: [],
+  invited: [],
+  details: {}
+}
+
+const newListFn = (alice: any, bob: any) => pipe(
+  newList(getUserFromToken(alice.token), 'list a', [alice.user_id, bob.user_id]),
+  TE.getOrElse(() => T.of(EMPTY_LIST))
+)();
 
 before('Connect to the DB', async () => {
   console.log('-- List items test --');
@@ -42,7 +57,7 @@ before('Connect to the DB', async () => {
   userBob = await registerUserByMail('Bob', 'bob@test.com', 'bob');
   userCharlie = await registerUserByMail('Charlie', 'charlie@test.com', 'charlie');
   console.log('registered users');
-  listA = await newList(getUserFromToken(userAlice.token), 'list a', [userAlice.user_id as string, userBob.user_id as string]);
+  listA = await newListFn(userAlice, userBob);
   console.log('created list');
   privateUser = await registerUserByMail('Private', 'private@test.com', 'private');
   console.log('added user')
@@ -52,7 +67,11 @@ before('Connect to the DB', async () => {
   // console.log('Saved settings: ', privateSettings);
 });
 
-describe('Updating item', () => {
+describe('Items', () => {
+
+  describe('Adding items', () => {
+    
+  });
 
   describe('Fail on wrong calls', () => {
     it('Should fail for missing headers', (done) => {

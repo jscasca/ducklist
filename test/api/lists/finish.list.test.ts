@@ -5,9 +5,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import app from '../../../src/index';
+import { pipe } from "fp-ts/lib/function";
+import * as T from "fp-ts/lib/Task";
+import * as TE from "fp-ts/lib/TaskEither";
 import { registerUserByMail } from '../../../src/middleware/engine';
 import { addListItem, newList, isEmail, updateListItem, updateListItemStatus } from '../../../src/middleware/lists';
-import { FinishedListItem, FinishedShoppingList, ShoppingList, ShoppingListItem, UserToken } from '../../../src/types';
+import { FinishedListItem, FinishedShoppingList, ShoppingList, ShoppingListItem, UserToken, TodoList } from '../../../src/types';
 import { ObjectId } from 'mongodb';
 
 import { getUserFromToken } from '../../authUtil';
@@ -36,6 +39,18 @@ let checkedItem2: ShoppingListItem;
 let deletedItem1: ShoppingListItem;
 
 const invitedByMail = "invitedWithOutAccount@test.com";
+
+const EMPTY_LIST: TodoList = {
+  name: '',
+  shared: [],
+  invited: [],
+  details: {}
+}
+
+const newListFn = (alice: any, bob: any) => pipe(
+  newList(getUserFromToken(alice.token), 'list a', [alice.user_id, bob.user_id]),
+  TE.getOrElse(() => T.of(EMPTY_LIST))
+)();
 
 before('Connect to the DB', async () => {
   console.log('-- List finish test --')
