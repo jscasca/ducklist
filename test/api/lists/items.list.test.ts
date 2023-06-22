@@ -171,6 +171,14 @@ describe('Items', () => {
 
   });
 
+  describe('Update item attributes', () => {
+
+    it('Should update a single attribute of the item', () => {
+      request(app)
+      .post(`list`)
+    });
+  });
+
 });
 
 after('Disconnect', () => {

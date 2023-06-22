@@ -91,11 +91,11 @@ export interface TodoList {
 }
 
 export interface TodoListItem {
-  list_id: string;
+  list_id: string | TodoList;
   name: string;
   status: 'deleted' | 'checked' | 'pending' | 'unknown';
   details: any;
-  notes: any;
+  notes?: any;
   _id?: ObjectId;
 }
 

@@ -3,6 +3,7 @@ import { pipe } from "fp-ts/lib/function";
 import * as TE from "fp-ts/lib/TaskEither";
 import * as T from "fp-ts/lib/Task";
 import { ObjectId } from "mongodb";
+import * as Mongoose from 'mongoose';
 import { ElementNotFoundException, UserAccessException, ValidationError } from "../exceptions";
 import { HttpError, internalError, notFound, userAccess, validationError } from "../httpError";
 import { FinishedListDetails, FinishedTodoList, List, ShoppingList, ShoppingListItem, TodoList, TodoListItem, User, UserToken } from "../types";
@@ -295,61 +296,107 @@ const getItems = (list: TodoList): TE.TaskEither<HttpError, TodoListItem[]> => {
   );
 };
 
-export async function getListItems(user: UserToken, listId: string) {
+export const getListItems = (user: UserToken, listId: string): TE.TaskEither<HttpError, TodoListItem[]> => {
   return pipe(
     getList(user, listId),
     TE.chain(list => getItems(list))
   );
 };
 
-const addItemFn = (user: UserToken, newItem: any) => {
-  return (list: TodoList): TE.TaskEither<HttpError, TodoListItem> => {
-    const item = {
-      ...newItem,
-      list_id: list._id,
-      status: 'pending',
-      details: {
-        ...newItem.details,
-        created: Date.now(),
-        createdBy: new ObjectId(user.user_id)
-      }
-    }
-    return TE.tryCatch(
-      () => TodoListItemModel.create(item),
-      (reason) => internalError()
-    );
-  };
+const addItemFn = (list: TodoList, item: Record<string, string>): TE.TaskEither<HttpError, TodoListItem> => {
+  const listItem = {
+    ...item,
+    list_id: list._id
+  }
+  return TE.tryCatch(
+    () => TodoListItemModel.create(listItem),
+    (reason) => internalError()
+  )
 };
 
-const validateNewItem = (newItem: any): TE.TaskEither<HttpError, Record<string, string>> => {
-  //
+const validateNewItem = (user: UserToken, newItem: any): TE.TaskEither<HttpError, Record<string, string>> => {
+  const item = {
+    ...newItem,
+    status: 'pending',
+    details: {
+      ...newItem.details,
+      created: Date.now(),
+      createdBy: new ObjectId(user.user_id)
+    }
+  };
+  if (item.name) {
+    return TE.right(item);
+  }
   return TE.left(validationError());
 };
 
 export const addListItem = (user: UserToken, listId: string, newItem: any): TE.TaskEither<HttpError, TodoListItem> => {
   //
   return pipe(
-    validateNewItem(newItem),
+    validateNewItem(user, newItem),
     TE.bindTo('item'),
     TE.bind('list', () => getList(user, listId)),
-    TE.chain(list => addItemFn(user, newItem)(list))
+    TE.chain(({list, item}) => addItemFn(list, item))
   );
-  // const timestamp = Date.now();
-  // const nextItem = {
-  //   ...newItem,
-  //   list_id: listId,
-  //   status: 'pending',
-  //   details: {
-  //     ...newItem.details,
-  //     updated: timestamp,
-  //     updatedBy: new ObjectId(user.user_id),
-  //     created: timestamp,
-  //     createdBy: new ObjectId(user.user_id)
-  //   }
-  // };
-  // // console.log('saving next item: ', nextItem);
-  // const item = await ShoppingListItemModel.create(nextItem);
-  // return item;
+};
+
+/*
+Nested poipulate example
+Project.find(query)
+  .populate({ 
+     path: 'pages',
+     populate: {
+       path: 'components',
+       model: 'Component'
+     } 
+  })
+  .exec(function(err, docs) {});
+*/
+
+const validateItemAcess = (user: UserToken, itemId: string) => {
+  return pipe(
+    TE.tryCatch(
+      () => TodoListItemModel.findById(itemId).populate({ path: 'list_id', populate: { path: 'shared', model: 'todo_list'}}) as Promise<TodoListItem>,
+      (reason) => notFound()
+    ),
+    TE.chain((item: TodoListItem) => {
+      if (!(item.list_id as TodoList).shared.some(u => u._id?.toString() === user.user_id)) {
+        return TE.left(userAccess());
+      }
+      return TE.right(item);
+    })
+  );
+};
+
+const isValidId = (id: string): E.Either<HttpError, string> => {
+  return Mongoose.isValidObjectId(id) ? E.right(id) : E.left(validationError());
+}
+
+const getItem = (user: UserToken, itemId: string): TE.TaskEither<HttpError, TodoListItem> => {
+  return pipe(
+    isValidId(itemId),
+    TE.fromEither,
+    TE.chain((id: string) => validateItemAcess(user, id))
+  );
+};
+
+const validateItemUpdates = (updates: Record<string, any>): E.Either<HttpError, Record<string, any>> => {
+  //
+  return E.right(updates);
+}
+
+const updateItemFn = (item: TodoListItem, updates: Record<string, any>): TE.TaskEither<HttpError, TodoListItem> => {
+  return TE.left(internalError());
+};
+
+export const updateItem = (user: UserToken, itemId: string, updates: Record<string, any>) => {
+  return pipe(
+    validateItemUpdates(updates),
+    TE.fromEither,
+    TE.bindTo('updates'),
+    TE.bind('item', () => getItem(user, itemId)),
+    TE.chain(({updates, item}) => updateItemFn(item, updates))
+  );
 };
 
 export async function updateListItem(user: UserToken, item: any) {
@@ -475,7 +522,7 @@ const finishFn = async (list: TodoList, user: UserToken, opts: any): Promise<Fin
       finishedOn: Date.now(),
       finishedBy: new ObjectId(user.user_id)
     },
-    items: items.map((item: ShoppingListItem) => ({
+    items: items.map((item: TodoListItem) => ({
       name: item.name,
       status: item.status,
       notes: item.notes,

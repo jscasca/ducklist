@@ -6,7 +6,7 @@ import { ValidationError } from '../exceptions';
 import { HttpError, validationError } from '../httpError';
 import { verifyToken } from '../middleware/auth';
 import { addListItem, finishList, getListItems, getLists, getList, inviteToList, newList, removeList, updateList, updateListItem, updateListItemStatus } from '../middleware/lists';
-import { TodoList, UserToken } from '../types';
+import { FinishedListDetails, TodoList, TodoListItem, UserToken } from '../types';
 import { handleException } from './exceptionHandler';
 import { pipe } from 'fp-ts/lib/function';
 
@@ -63,17 +63,14 @@ router.post('/', verifyToken, (req, res) => {
   router.delete('/:id', verifyToken, (req, res) => {
     console.log('deleting lists');
     const user = (req as any).user;
-    const list_id = req.params.id;
-    console.log('id: ', list_id);
-    // pipe(
-      
-    // )();
-    removeList(user, list_id).then((list) => {
-      return res.status(200).json(list);
-    }).catch((e) => {
-      console.log(e);
-      return handleException(res, e);
-    });
+    const listId = req.params.id;
+    pipe(
+      removeList(user, listId),
+      TE.fold(
+        (e: HttpError) => T.of(res.status(e.code()).send(e.message)),
+        (_) => T.of(res.status(200))
+      )
+    )();
   });
 
   // Update existing list
@@ -91,42 +88,55 @@ router.post('/', verifyToken, (req, res) => {
     )();
   });
 
-  // TO-DO
+  // Finish list
+  router.post('/:id/finish', verifyToken, (req, res) => {
+    const user = (req as any).user;
+    const listId = req.params.id;
+    const { opts } = req.body;
+    pipe(
+      finishList(user, listId, opts),
+      TE.fold(
+        (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+        (finished: FinishedListDetails) => T.of(res.status(200).json(finished))
+      )
+    )
+  });
 
-  // Update list details
-
-  // Update list name
-
-  // Update shared
+  // Get list items
+  router.get('/:id/items', verifyToken, (req, res) => {
+    const user = (req as any).user;
+    const listId = req.params.id;
+    pipe(
+      getListItems(user, listId),
+      TE.fold(
+        (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+        (items: TodoListItem[]) => T.of(res.status(200).json(items))
+      )
+    )();
+  });
 
   // Insert new list tiem
-  router.post('/lists/:id/items', verifyToken, (req, res) => {
+  router.post('/:id/items', verifyToken, (req, res) => {
     const user = (req as any).user;
     const listId = req.params.id;
     const { item } = req.body;
-    if (!(user && listId)) {
-      return handleException(res, new ValidationError('Missing parameters'), () => false);
-    }
-    addListItem(user, listId, item).then((newItem) => {
-      res.status(200).json(newItem);
-    }).catch((e) => {
-      handleException(res, e, () => false);
-    });
+    pipe(
+      addListItem(user, listId, item),
+      TE.fold(
+        (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+        (i: TodoListItem) => T.of(res.status(200).json(i))
+      )
+    )();
   });
 
-  router.get('/lists/:id/items', verifyToken, (req: Request, res: Response) => {
+  // Update item
+  router.put('/items/:id', verifyToken, (req, res) => {
     const user = (req as any).user;
-    const listId = req.params.id;
-    if (!(user && listId)) {
-      // return res.status(400).send('Missing parameters');
-      handleException(res, new ValidationError('Missing parameters'), () => false);
-    }
-    getListItems(user, listId).then((listItems) => {
-      res.status(200).json(listItems);
-    }).catch((e) => {
-      handleException(res, e, () => false);
-    });
+    const itemId = req.params.id;
+    const { updates } = req.body;
   });
+
+  // Remove item?
 
   router.delete('/lists/items/:item', verifyToken, (req, res) => {
     const user = (req as any).user;
@@ -139,22 +149,6 @@ router.post('/', verifyToken, (req, res) => {
   });
 
   router.post('/lists/items/:item/status', verifyToken, (req, res) => {
-    console.log('updating item');
-    const user = (req as any).user;
-    const itemId = req.params.item;
-    const { item } = req.body;
-    if (!(user && itemId && item) || itemId !== item._id) {
-      return handleException(res, new ValidationError('Missing or incorrect parameters'));
-    }
-    updateListItem(user, item).then((updatedItem) => {
-      return res.status(200).json(updatedItem);
-    }).catch((e) => {
-      return handleException(res, e);
-    });
-  });
-
-  // Update list item
-  router.post('/lists/items/:item', verifyToken, (req, res) => {
     console.log('updating item');
     const user = (req as any).user;
     const itemId = req.params.item;
