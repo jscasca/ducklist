@@ -119,12 +119,12 @@ router.post('/', verifyToken, (req, res) => {
   router.post('/:id/items', verifyToken, (req, res) => {
     const user = (req as any).user;
     const listId = req.params.id;
-    const { item } = req.body;
+    const { newItem } = req.body;
     pipe(
-      addListItem(user, listId, item),
+      addListItem(user, listId, newItem),
       TE.fold(
         (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
-        (i: TodoListItem) => T.of(res.status(200).json(i))
+        (item: TodoListItem) => T.of(res.status(200).json(item))
       )
     )();
   });
@@ -136,8 +136,21 @@ router.post('/', verifyToken, (req, res) => {
     const { updates } = req.body;
   });
 
-  // Remove item?
+  // Update item status
+  router.put('/items/:id', verifyToken, (req, res) => {
+    const user = (req as any).user;
+    const itemId = req.params.id;
+    const { status } = req.body;
+    pipe(
+      updateListItemStatus(user, itemId, status),
+      TE.fold(
+        (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+        (item: TodoListItem) => T.of(res.status(200).json(item))
+      )
+    )();
+  });
 
+  // Remove item?
   router.delete('/lists/items/:item', verifyToken, (req, res) => {
     const user = (req as any).user;
     const itemId = req.params.item;
