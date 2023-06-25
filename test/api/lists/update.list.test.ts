@@ -99,6 +99,18 @@ describe('Updating lists', () => {
         })
     });
 
+    it('Should fail for wrong correct id', (done) => {
+      request(app)
+        .post(`/lists/123456789012`)
+        .set('x-access-token', userAlice.token)
+        .send({updates: {}})
+        .expect(404)
+        .end((err) => {
+          if(err) return done(err);
+          done();
+        })
+    });
+
     it('Should fail for wrong owner', (done) => {
       request(app)
         .post(`/lists/${listA._id}`)

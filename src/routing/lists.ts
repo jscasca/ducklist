@@ -5,7 +5,7 @@ import * as E from "fp-ts/lib/Either";
 import { ValidationError } from '../exceptions';
 import { HttpError, validationError } from '../httpError';
 import { verifyToken } from '../middleware/auth';
-import { addListItem, finishList, getListItems, getLists, getList, inviteToList, newList, removeList, updateList, updateListItem, updateListItemStatus } from '../middleware/lists';
+import { addListItem, finishList, getListItems, getLists, getList, inviteToList, newList, removeList, updateList, updateListItem, updateListItemStatus, updateItemAttributes } from '../middleware/lists';
 import { FinishedListDetails, TodoList, TodoListItem, UserToken } from '../types';
 import { handleException } from './exceptionHandler';
 import { pipe } from 'fp-ts/lib/function';
@@ -74,7 +74,7 @@ router.post('/', verifyToken, (req, res) => {
   });
 
   // Update existing list
-  router.post('/:id', verifyToken, (req, res) => {
+  router.put('/:id', verifyToken, (req, res) => {
     const user = (req as any).user;
     console.log('updating existing');
     const listId = req.params.id;
@@ -119,7 +119,7 @@ router.post('/', verifyToken, (req, res) => {
   router.post('/:id/items', verifyToken, (req, res) => {
     const user = (req as any).user;
     const listId = req.params.id;
-    const { newItem } = req.body;
+    const newItem = req.body;
     pipe(
       addListItem(user, listId, newItem),
       TE.fold(
@@ -134,15 +134,36 @@ router.post('/', verifyToken, (req, res) => {
     const user = (req as any).user;
     const itemId = req.params.id;
     const { updates } = req.body;
+    res.status(503).send('Not implemented');
   });
 
   // Update item status
-  router.put('/items/:id', verifyToken, (req, res) => {
+  router.put('/items/:id/status', verifyToken, (req, res) => {
     const user = (req as any).user;
     const itemId = req.params.id;
     const { status } = req.body;
     pipe(
       updateListItemStatus(user, itemId, status),
+      TE.fold(
+        (e: HttpError) => {
+          // console.log('failure: ', e);
+          return T.of(res.status(e.code()).send(e.message()))
+        },
+        (item: TodoListItem) => {
+          // console.log('returning: ', item);
+          return T.of(res.status(200).json(item));
+        }
+      )
+    )();
+  });
+
+  // Update item status
+  router.put('/items/:id/attributes', verifyToken, (req, res) => {
+    const user = (req as any).user;
+    const itemId = req.params.id;
+    const { updates } = req.body;
+    pipe(
+      updateItemAttributes(user, itemId, updates),
       TE.fold(
         (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
         (item: TodoListItem) => T.of(res.status(200).json(item))
@@ -157,21 +178,6 @@ router.post('/', verifyToken, (req, res) => {
     updateListItemStatus(user, itemId, 'deleted').then(updatedItem => {
       return res.status(200).json(updatedItem);
     }).catch(e => {
-      return handleException(res, e);
-    });
-  });
-
-  router.post('/lists/items/:item/status', verifyToken, (req, res) => {
-    console.log('updating item');
-    const user = (req as any).user;
-    const itemId = req.params.item;
-    const { item } = req.body;
-    if (!(user && itemId && item) || itemId !== item._id) {
-      return handleException(res, new ValidationError('Missing or incorrect parameters'));
-    }
-    updateListItem(user, item).then((updatedItem) => {
-      return res.status(200).json(updatedItem);
-    }).catch((e) => {
       return handleException(res, e);
     });
   });

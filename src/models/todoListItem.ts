@@ -3,11 +3,14 @@ import { model, Schema } from "mongoose";
 import { TodoListItem } from '../types';
 
 const schema = new Schema<TodoListItem>({
-  list_id: {type: String, ref: 'list'},
+  list_id: {type: String, ref: 'todo_list'},
   name: {type: String, required: true},
   status: {type: String, required: true},
   details: {
+    created: { type: Date, default: Date.now },
     createdBy: {type: ObjectId, ref: 'user'},
+    updated: { type: Date },
+    updatedBy: { type: ObjectId, ref: 'user'}
     // createdOn: { type: Date, default: Date.now } // Apparently you can get the date from the _id
   },
   notes: {}
