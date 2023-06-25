@@ -45,7 +45,6 @@ const isNewListParamsValid = (user: UserToken, name: string, shared: string[]): 
 };
 
 export const newList = (user: UserToken, name: string, shared: string[]): TE.TaskEither<HttpError, TodoList> => {
-  console.log(isNewListParamsValid(user, name, shared));
   return isNewListParamsValid(user, name, shared) ?
   TE.tryCatch(
     () => TodoListModel.create({
@@ -361,7 +360,7 @@ const validateItemAccess = (user: UserToken, itemId: string) => {
     TE.tryCatch(
       () => TodoListItemModel.findById(new ObjectId(itemId)).populate({ path: 'list_id', populate: { path: 'shared', model: 'user'}}) as Promise<TodoListItem>,
       (reason) => {
-        console.log('error: ', reason);
+        // console.log('error: ', reason);
         return internalError()
       }
     ),
@@ -491,7 +490,7 @@ export const updateListItemStatus = (user: UserToken, itemId: string, newStatus:
 
 export async function updateListItemNotes(user: UserToken, itemId: string, notes: any) {
   // validate notes?
-  const updatedItem = await ShoppingListItemModel.findByIdAndUpdate(
+  const updatedItem = await TodoListItemModel.findByIdAndUpdate(
     itemId, 
     { $set: { notes: notes} },
     { new: true });
@@ -513,6 +512,7 @@ const carryOverList = async (list: TodoList) => {
     name: upName(list.name),
     shared: list.shared
   });
+  // console.log('created list: ', newList);
   // change list items
   const updated = await TodoListItemModel.updateMany(
     { list_id: list._id, status: 'pending' }, // filter
@@ -520,10 +520,10 @@ const carryOverList = async (list: TodoList) => {
     {} // options
   );
 
-  return {
+  return {carryover: {
     items: updated.modifiedCount,
     list: newList._id
-  }
+  }}
 };
 
 const finishFn = async (list: TodoList, user: UserToken, opts: any): Promise<FinishedListDetails> => {
@@ -549,10 +549,10 @@ const finishFn = async (list: TodoList, user: UserToken, opts: any): Promise<Fin
 
   if (opts.carryover && pending.length > 0) {
     // Create a new list with the pending items
-    carryOver = carryOverList(list);
+    carryOver = await carryOverList(list);
   }
-  const removedItems = await ShoppingListItemModel.deleteMany({list_id: list._id});
-  const removedList = await ShoppingListModel.findByIdAndDelete(list._id);
+  const removedItems = await TodoListItemModel.deleteMany({list_id: list._id});
+  const removedList = await TodoListModel.findByIdAndDelete(list._id);
   return {
     finished: {
       archive: finishedList._id?.toString(),

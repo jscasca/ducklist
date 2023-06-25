@@ -99,7 +99,7 @@ router.post('/', verifyToken, (req, res) => {
         (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
         (finished: FinishedListDetails) => T.of(res.status(200).json(finished))
       )
-    )
+    )();
   });
 
   // Get list items
@@ -171,17 +171,6 @@ router.post('/', verifyToken, (req, res) => {
     )();
   });
 
-  // Remove item?
-  router.delete('/lists/items/:item', verifyToken, (req, res) => {
-    const user = (req as any).user;
-    const itemId = req.params.item;
-    updateListItemStatus(user, itemId, 'deleted').then(updatedItem => {
-      return res.status(200).json(updatedItem);
-    }).catch(e => {
-      return handleException(res, e);
-    });
-  });
-
   router.delete('/lists/:id/collaborator', verifyToken, (req, res) => {
     // removeFromList
   });
@@ -205,11 +194,14 @@ router.post('/', verifyToken, (req, res) => {
     const user = (req as any).user;
     const listId = req.params.id;
     const { opts } = req.body;
-    finishList(user, listId, opts || {}).then((finished) => {
-      return res.status(200).json(finished);
-    }).catch(e => {
-      return handleException(res, e);
-    });
+    //
+    pipe(
+      finishList(user, listId, opts),
+      TE.fold(
+        (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+        (r) => T.of(res.status(200).json(r))
+      )
+    )();
   });
 
   router.post('/lists/accept', verifyToken, (req, res) => {
