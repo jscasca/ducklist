@@ -64,11 +64,18 @@ router.post('/', verifyToken, (req, res) => {
     console.log('deleting lists');
     const user = (req as any).user;
     const listId = req.params.id;
+    const opts = req.body ?? {};
     pipe(
-      removeList(user, listId),
+      removeList(user, listId, opts),
       TE.fold(
-        (e: HttpError) => T.of(res.status(e.code()).send(e.message)),
-        (_) => T.of(res.status(200))
+        (e: HttpError) => {
+          console.log('failing code: ', e.code());
+          return T.of(res.status(e.code()).send(e.message()));
+        },
+        (_) => {
+          console.log('200 OK');
+          return T.of(res.sendStatus(200));
+        }
       )
     )();
   });

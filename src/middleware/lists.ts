@@ -574,6 +574,7 @@ export const finishList = (user: UserToken, listId: string, opts: any = {}): TE.
 };
 
 const removeListAndItems = async (listId: ObjectId | undefined) => {
+  console.log('Removing list and items');
   await TodoListItemModel.deleteMany({list_id: listId});
   await TodoListModel.findByIdAndDelete(listId);
   return true;
@@ -584,23 +585,27 @@ const removeUserFromList = async (listId: ObjectId | undefined, userId: string) 
   //   $set: {shared: list.shared.filter((s: any) => s.toString() !== user.user_id).map((user: User) => user._id)}
   // }, { new: true});
   // {new: true} ensure we get the updated object
+  console.log('removing user from list');
   await TodoListModel.findByIdAndUpdate(listId, {
     $pull: {shared: userId}
   });
   return true;
 };
 
-export const removeList = (user: UserToken, listId: string, forEveryone: boolean = false): TE.TaskEither<HttpError, boolean> => {
+export const removeList = (user: UserToken, listId: string, opts: Record<string, any>): TE.TaskEither<HttpError, boolean> => {
   return pipe(
     getList(user, listId),
     TE.chain(list => {
-      if (list.shared.length === 1 || forEveryone) {
+      console.log('removing list: ', list);
+      if (list.shared.length === 1 || opts.force) {
         // delete and remove
+        console.log('removing force');
         return TE.tryCatch(
           () => removeListAndItems(list._id),
           (reason) => internalError()
         );
       }
+      console.log('removing user only')
       return TE.tryCatch(
         () => removeUserFromList(list._id, user.user_id),
         (reason) => internalError()
