@@ -1,22 +1,61 @@
-import { Express, Request, Response} from 'express';
+import { Express, Request, Response, Router} from 'express';
+import * as TE from "fp-ts/lib/TaskEither";
+import * as T from "fp-ts/lib/Task";
+import { pipe } from 'fp-ts/lib/function';
 import { verifyToken } from '../middleware/auth';
+import { HttpError } from '../httpError';
+import { getSettings, setPrivacy, updateSettingsList } from '../middleware/settings';
 
-export const register = (app: Express) => {
+const router = Router();
 
-  app.get('/settings', verifyToken, (req: Request, res: Response) => {
-    const user = (req as any).user;
-    res.send(200).json({'text':'welcome'});
-  });
+router.get('/', verifyToken, (req, res) => {
+  const user = (req as any).user;
+  pipe(
+    getSettings(user),
+    TE.fold(
+      (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+      (settings: any) => T.of(res.status(200).json(settings))
+    )
+  )();
+});
 
-  app.post('/settings/', verifyToken, (req: Request, res: Response) => {
-    res.send(200).json({'text':'welcome'});
-  });
+router.put('/', verifyToken, (req, res) => {
+  const user = (req as any).user;
+  pipe(
+    getSettings(user),
+    TE.fold(
+      (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+      (settings: any) => T.of(res.status(200).json(settings))
+    )
+  )();
+});
 
-  app.get('/settings/blacklist', verifyToken, (req, res) => {
-    res.send(200).json({'text':'welcome'});
-  });
+router.put('/privacy/status', verifyToken, (req, res) => {
+  const user = (req as any).user;
+  const { status } = req.body;
+  pipe(
+    setPrivacy(user, status),
+    TE.fold(
+      (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+      (settings: any) => T.of(res.status(200).json(settings))
+    )
+  )();
+});
 
-  app.get('/settings/whitelist', verifyToken, (req, res) => {
-    res.send(200).json({'text': 'wwelcome'});
-  });
-};
+router.post('/privacy/updates/:list', verifyToken, (req, res) => {
+  const user = (req as any).user;
+  const list = req.params.list;
+  const { updates } = req.body;
+  pipe(
+    updateSettingsList(user, list, updates),
+    TE.fold(
+      (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+      (settings: any) => T.of(res.status(200).json(settings))
+    )
+  )();
+
+});
+
+export {
+  router
+}

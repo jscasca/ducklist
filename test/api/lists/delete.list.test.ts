@@ -52,8 +52,6 @@ const addItemFn = (user: any, list: TodoList, item: any) => pipe(
 )();
 
 before('Connect to the DB', async () => {
-  console.log('-- List delete test --');
-  console.log('droppping database');
   const con = await connect();
   await con.connection.db.dropDatabase();
   userAlice = await registerUserByMail('Alice', 'alice@test.com', 'alice');
@@ -82,7 +80,6 @@ describe('Deleting lists', () => {
         .set('x-access-token', userAlice.token)
         .expect(400)
         .end((err) => {
-          console.log('error: ', err);
           if(err) return done(err);
           done();
         })
@@ -127,15 +124,14 @@ describe('Deleting lists', () => {
       .expect(200)
       .end(async(err, res) => {
         if(err) return done(err);
-        console.log('Checking deleted elements');
 
         const removedFrom = await TodoListModel.findById(listA._id);
-        console.log('Removed list: ', removedFrom);
-        expect(removedFrom.shared.some((u: any) => u._id.toString() === userBob.user_id)).to.be.false;
-        expect(removedFrom.shared.some((u: any) => u._id.toString() === userAlice.user_id)).to.be.true;
+        expect(removedFrom.shared.some((u: any) => u._id.equals(userBob.user_id))).to.be.false;
+        expect(removedFrom.shared.some((u: any) => u._id.equals(userAlice.user_id))).to.be.true;
 
         const listItem = await TodoListItemModel.findById(itemA._id);
         expect(listItem).to.be.not.null;
+
         done();
       });
     });
@@ -160,32 +156,33 @@ describe('Deleting lists', () => {
 
   });
 
-  // describe('Deleting for single users', () => {
+  describe('Deleting for single users', () => {
 
-  //   beforeEach('Prep single user list', async () => {
-  //     listA = await newListFn(userAlice, [userAlice]);
-  //     itemA = await addItemFn(userAlice, listA, {name: 'test'});
-  //   });
+    beforeEach('Prep single user list', async () => {
+      listA = await newListFn(userAlice, [userAlice]);
+      itemA = await addItemFn(userAlice, listA, {name: 'test'});
+    });
 
-  //   it('Should delete a list for a single user and delete the list', (done) => {
-  //     const list = TodoListModel.findById(listA._id);
-  //     const req = request(app)
-  //     .delete(`/lists/${listA._id}`)
-  //     .set('x-access-token', userAlice.token)
-  //     .expect(200)
-  //     .end(async(err, res) => {
-  //       if(err) return done(err);
+    it('Should delete a list for a single user and delete the list', (done) => {
+      const list = TodoListModel.findById(listA._id);
+      const req = request(app)
+      .delete(`/lists/${listA._id}`)
+      .set('x-access-token', userAlice.token)
+      .expect(200)
+      .end(async(err, res) => {
+        if(err) return done(err);
 
-  //       const deleted = await TodoListModel.findById(listA._id);
-  //       expect(deleted).to.be.null;
+        const deleted = await TodoListModel.findById(listA._id);
+        expect(deleted).to.be.null;
 
-  //       const listItem = await TodoListItemModel.findById(itemA._id);
-  //       expect(listItem).to.be.null;
+        const listItem = await TodoListItemModel.findById(itemA._id);
+        expect(listItem).to.be.null;
 
-  //     });
-  //   });
+        done();
+      });
+    });
 
-  // });
+  });
 
 });
 

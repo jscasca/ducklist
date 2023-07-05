@@ -8,6 +8,7 @@
  import { connect } from './db/database';
 
  import { router as ListRouter } from './routing/lists';
+ import { router as SettingsRouter } from './routing/settings';
  import { router as LoginRouter } from './routing/login';
 
  import * as routes from './routes';
@@ -37,6 +38,7 @@ const corsOptions = {
  app.use(express.json());
 
  app.use('/lists', ListRouter);
+ app.use('/settings', SettingsRouter)
 //  app.use('/login')
 
 //  routes.register(app as express.Application);

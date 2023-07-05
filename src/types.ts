@@ -161,12 +161,12 @@ export interface FinishedListItem {
 }
 
 export interface UserSettings {
-  _id: ObjectId;
-  privacy: {
-    privacy: 'public' | 'private';
-    blacklisted: User[]; // Blocked users: do not accept invites
-    whitelisted: User[]; // Accept by default
-    allowed: User[]; // Close contacts: can invite even if private
+  _id?: ObjectId;
+  privacy?: {
+    privacy?: 'public' | 'private';
+    blacklisted?: User[] | ObjectId[]; // Blocked users: do not accept invites
+    whitelisted?: User[] | ObjectId[]; // Accept by default
+    allowed?: User[] | ObjectId[]; // Close contacts: can invite even if private
   }
 }
 
