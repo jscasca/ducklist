@@ -43,22 +43,36 @@ const validateUpdates = (list: string, updates: Record<string, any>): E.Either<H
   if (!Array.isArray(updates.add) || !Array.isArray(updates.remove)) {
     return E.left(validationError());
   }
+  if (!['blacklisted', 'whitelisted', 'allowed'].includes(list)) {
+    return E.left(validationError());
+  }
+  const listToUpdate = 'privacy.' + list;
   const add = updates.add.filter(u => ObjectId.isValid(u)).map(u => new ObjectId(u));
   const remove = updates.remove.filter(u => ObjectId.isValid(u)).map(u => new ObjectId(u));
+
+  const push = add.length > 0 ? { $push: { [listToUpdate]: { $each: add } } } : {};
+  const pull = remove.length > 0 ? { $pullAll: { [listToUpdate]: remove  } } : {};
   return E.right({
-    $push: { [list]: { $each: add } },
-    $pull: { [list]: { $each: remove } }
+    ...push,
+    ...pull
   });
 };
 
-export const updateSettingsList = (user: UserToken, list: string, updates: Record<string, any>) => {
-  pipe(
+export const updateSettingsList = (user: UserToken, list: string, updates: Record<string, any>): TE.TaskEither<HttpError, UserSettings> => {
+  console.log('updating with: ', list, updates);
+  return pipe(
     validateUpdates(list, updates),
     TE.fromEither,
-    TE.chain((updates) => TE.tryCatch(
-      () => SettingsModel.findByIdAndUpdate(user.user_id, updates, { upsert: true, new: true}) as Promise<UserSettings>,
-      (reason) => internalError()
-    ))
+    TE.chain((update) => {
+      console.log(update);
+      return TE.tryCatch(
+      () => SettingsModel.findByIdAndUpdate(user.user_id, update, { upsert: true, new: true}) as Promise<UserSettings>,
+      (reason) => {
+        console.error(reason);
+        return internalError();
+      }
+    )}
+    )
   );
 };
 
@@ -82,6 +96,7 @@ const validatePrivacy = (privacy: string): E.Either<HttpError, string> => {
 };
 
 export const setPrivacy = (user: UserToken, privacy: string) => {
+  console.log('settings privacy: ', privacy);
   return pipe(
     validatePrivacy(privacy),
     TE.fromEither,
@@ -89,7 +104,7 @@ export const setPrivacy = (user: UserToken, privacy: string) => {
       TE.tryCatch(
         () => SettingsModel.findOneAndUpdate(
           { _id: new ObjectId(user.user_id) },
-          { $push: { 'privacy.privacy': privacy} },
+          { $set: { 'privacy.privacy': privacyString} },
           { upsert: true, new: true }
         ) as Promise<UserSettings>,
         (reason) => internalError()

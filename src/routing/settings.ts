@@ -19,17 +19,6 @@ router.get('/', verifyToken, (req, res) => {
   )();
 });
 
-router.put('/', verifyToken, (req, res) => {
-  const user = (req as any).user;
-  pipe(
-    getSettings(user),
-    TE.fold(
-      (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
-      (settings: any) => T.of(res.status(200).json(settings))
-    )
-  )();
-});
-
 router.put('/privacy/status', verifyToken, (req, res) => {
   const user = (req as any).user;
   const { status } = req.body;
@@ -53,7 +42,6 @@ router.post('/privacy/updates/:list', verifyToken, (req, res) => {
       (settings: any) => T.of(res.status(200).json(settings))
     )
   )();
-
 });
 
 export {
