@@ -59,16 +59,13 @@ const validateUpdates = (list: string, updates: Record<string, any>): E.Either<H
 };
 
 export const updateSettingsList = (user: UserToken, list: string, updates: Record<string, any>): TE.TaskEither<HttpError, UserSettings> => {
-  console.log('updating with: ', list, updates);
   return pipe(
     validateUpdates(list, updates),
     TE.fromEither,
     TE.chain((update) => {
-      console.log(update);
       return TE.tryCatch(
       () => SettingsModel.findByIdAndUpdate(user.user_id, update, { upsert: true, new: true}) as Promise<UserSettings>,
       (reason) => {
-        console.error(reason);
         return internalError();
       }
     )}
@@ -96,7 +93,6 @@ const validatePrivacy = (privacy: string): E.Either<HttpError, string> => {
 };
 
 export const setPrivacy = (user: UserToken, privacy: string) => {
-  console.log('settings privacy: ', privacy);
   return pipe(
     validatePrivacy(privacy),
     TE.fromEither,
