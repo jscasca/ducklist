@@ -3,9 +3,11 @@ import { model, Schema } from "mongoose";
 import { ListInvite } from '../types';
 
 const schema = new Schema<ListInvite>({
-  list_id: {type: ObjectId, ref: 'shopping_list', required: true},
-  inviting_id: {type: ObjectId, ref: 'user', required: true},
-  invited_id: {type: ObjectId, ref: 'user'}
+  list_id: {type: ObjectId, ref: 'todo_list', required: true},
+  list_name: { type: String },
+  inviting: {},
+  invited_id: {type: ObjectId, ref: 'user'},
+  invited_mail: { type: String }
 });
 
 module.exports = model("list_invite", schema);

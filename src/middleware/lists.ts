@@ -1,11 +1,11 @@
 import * as E from "fp-ts/lib/Either";
 import { pipe } from "fp-ts/lib/function";
 import * as TE from "fp-ts/lib/TaskEither";
-import * as T from "fp-ts/lib/Task";
+import * as O from "fp-ts/lib/Option";
 import { ObjectId } from "mongodb";
 import { ElementNotFoundException, UserAccessException, ValidationError } from "../exceptions";
 import { HttpError, internalError, notFound, userAccess, validationError } from "../httpError";
-import { FinishedListDetails, FinishedTodoList, List, ShoppingList, ShoppingListItem, TodoList, TodoListItem, User, UserToken } from "../types";
+import { EmailLogin, FinishedListDetails, FinishedTodoList, List, ListInvite, ShoppingList, ShoppingListItem, TodoList, TodoListItem, User, UserNotification, UserSettings, UserToken } from "../types";
 
 const UserModel = require('../models/user');
 const ListInviteModel = require('../models/listInvite');
@@ -109,150 +109,6 @@ async function getListForUser(list_id: string, user: UserToken) {
   if(!list.shared.some((u) => u._id?.toString() === user.user_id)) {
     throw new UserAccessException(`List:${list_id}:User:${user.user_id}`);
   }
-  return list;
-}
-
-const isUsername = (s: string) => {
-  return s.startsWith('@');
-};
-
-export const isEmail = (s: string) => {
-  return /^[^@]+@[^@]+$/.test(s);
-  // return /([!#-'*+/-9=?A-Z^-~-]+(\.[!#-'*+/-9=?A-Z^-~-]+)*|\"\(\[\]!#-[^-~ \t]|(\\[\t -~]))+\")@([!#-'*+/-9=?A-Z^-~-]+(\.[!#-'*+/-9=?A-Z^-~-]+)*|\[[\t -Z^-~]*])/.test(s);
-};
-
-export async function inviteToList(user: UserToken, list_id: string, invited_id: string, invited: string) {
-  console.log('inviting to list');
-  // check the user has access to the list
-  const list = await getListForUser(list_id, user);
-  console.log('list: ', list);
-  if (invited_id) {
-    const invitedUser = await UserModel.findById(invited_id);
-    if (!invitedUser) {
-      throw new ElementNotFoundException(`User:${invited_id}`)
-    }
-    return inviteUserToList(user, list, invitedUser);
-  }
-  if (isUsername(invited)) {
-    // find by username
-    const invitedUser = UserModel.findOne({ username: invited.slice(1) });
-    if (invitedUser) {
-      return inviteUserToList(user, list, invitedUser);
-    } else {
-      // notify ??
-      // not sure what to do here
-    }
-  } else if (isEmail(invited)){
-    console.log('inviting by mail');
-    const existingLogin = await EmailLoginModel.findOne({ mail: invited });
-    // console.log('e')
-    const invitedUser = await UserModel.findById(existingLogin.user_id);
-    if (invitedUser) {
-      console.log('exisintg user');
-      return inviteUserToList(user, list, invitedUser);
-    } else {
-      console.log('nonexisintg');
-      // notify
-      return inviteByMail(user, list, invited);
-    }
-  } else {
-    //
-  }
-  // else do nothing and return the list?
-  // TBD: refactor this
-  return list;
-}
-
-// Blacklisted means the invited user is private or the inviting user has been blocked
-function isBlacklisted(settings: any, inviting: UserToken): boolean {
-  // console.log('privacy: ', JSON.stringify(settings.privacy));
-  return (settings?.privacy && (settings?.privacy?.privacy === 'private' || settings?.privacy?.blacklisted.some((u: any) => inviting.user_id === u._id)));
-}
-
-// whitelist means the request is accepted by default
-function isWhitelisted(settings: any, inviting: UserToken): boolean {
-  return (settings?.privacy && settings?.privacy?.whitelisted?.some((u:any) => inviting.user_id === u._id));
-}
-
-async function inviteDeny(user: UserToken, list: ShoppingList, invited: any) {
-  // update the list with the alias or the user and return that list
-  const updated = await ShoppingListModel.findByIdAndUpdate(
-    list._id,
-    { $addToSet: { invited: invited}}
-  );
-  return list;
-}
-
-async function inviteAccept(user: UserToken, list: ShoppingList, invited: User) {
-  const updated = await ShoppingListModel.findByIdAndUpdate(
-    list._id,
-    { $addToSet: { shared: invited._id}}
-  );
-  return updated;
-}
-
-async function inviteNotification(user: UserToken, list: ShoppingList, invited: User) {
-  console.log('creaiting invite, notification and updating list');
-  // createa list invite and a user notification
-  const invite = await ListInviteModel.create({
-    list_id: list._id,
-    inviting_id: new ObjectId(user.user_id),
-    invited_id: invited._id
-  });
-  console.log('invite created: ', invite);
-  const notification = await UserNotificationModel.create({
-    user_id: new ObjectId(invited._id),
-    notification: {
-      type: 'list_invite',
-      invite_id: invite._id,
-      inviting_user: {
-        name: user.name,
-        icon: user.icon
-      },
-      invited_list: {
-        name: list.name
-      }
-    }
-  });
-  console.log('notiication: ', notification);
-  console.log('adding user: ', invited);
-  const updated = await ShoppingListModel.findByIdAndUpdate(
-    list._id,
-    { $addToSet: { invited: invited}},
-    { new: true }
-  );
-  console.log('updayed: ', updated);
-  return updated;
-}
-
-async function inviteUserToList(user: UserToken, list: ShoppingList, invited: User) {
-  // get user settings
-  const userSettings = await UserSettingsModel.findById(invited._id);
-  console.log('settings: ', userSettings);
-  // check if blacklisted:
-  if (isBlacklisted(userSettings, user)) {
-    // return update list
-    console.log('nlackislt');
-    return inviteDeny(user, list, {})
-  }
-  // check if whitelisted
-  if (isWhitelisted(userSettings, user)) {
-    //
-    console.log('whitelisted');
-    return inviteAccept(user, list, invited);
-  }
-  console.log('normal invite');
-  // else generate notification and notify the user
-  return inviteNotification(user, list, invited);
-}
-
-// TODO: develop this feature
-async function inviteByMail(user: UserToken, list: ShoppingList, invitedMail: string) {
-  // Should create a notification to keep the reference of the users
-  // Email the notification id to the email address
-  // Then update the list with the person email as the name
-  // should email the external user
-  console.log('Need to implement [InviteByMail]');
   return list;
 }
 
@@ -574,7 +430,6 @@ export const finishList = (user: UserToken, listId: string, opts: any = {}): TE.
 };
 
 const removeListAndItems = async (listId: ObjectId | undefined) => {
-  console.log('Removing list and items');
   await TodoListItemModel.deleteMany({list_id: listId});
   await TodoListModel.findByIdAndDelete(listId);
   return true;
@@ -585,7 +440,6 @@ const removeUserFromList = async (listId: ObjectId | undefined, userId: string) 
   //   $set: {shared: list.shared.filter((s: any) => s.toString() !== user.user_id).map((user: User) => user._id)}
   // }, { new: true});
   // {new: true} ensure we get the updated object
-  console.log('removing user from list');
   await TodoListModel.findByIdAndUpdate(listId, {
     $pull: {shared: userId}
   });
@@ -596,16 +450,13 @@ export const removeList = (user: UserToken, listId: string, opts: Record<string,
   return pipe(
     getList(user, listId),
     TE.chain(list => {
-      console.log('removing list: ', list);
       if (list.shared.length === 1 || opts.force) {
         // delete and remove
-        console.log('removing force');
         return TE.tryCatch(
           () => removeListAndItems(list._id),
           (reason) => internalError()
         );
       }
-      console.log('removing user only')
       return TE.tryCatch(
         () => removeUserFromList(list._id, user.user_id),
         (reason) => internalError()
@@ -648,3 +499,173 @@ export async function denyInvite(user: UserToken, invite_id: string) {
     throw new UserAccessException('List not shared with user');
   }
 }
+
+export const inviteByEmails = () => {};
+
+const validateUsers = (invited: string[]) => {
+  if (!Array.isArray(invited)) return E.left(validationError());
+  return E.right(invited.filter(i => ObjectId.isValid(i)).map(i => new ObjectId(i)));
+};
+
+interface sortInvites {
+  accept: ObjectId[];
+  deny: ObjectId[];
+  invite: ObjectId[];
+}
+
+const inviteAndNotifyUsers = async (user: UserToken, list: TodoList, invited: ObjectId[]): Promise<void> => {
+  // make the invites
+  const userFull = UserModel.findById(new ObjectId(user.user_id));
+  const invites = invited.map(u => {
+    const invite: ListInvite = {
+      list_id: list._id as ObjectId,
+      list_name: list.name,
+      inviting: userFull,
+      invited_id: u
+    };
+    return invite;
+  });
+  const listInvites = await ListInviteModel.insertMany(invites) as ListInvite[];
+  // make the notifications
+  const notifications = listInvites.map(l => {
+    const notification: UserNotification = {
+      user_id: l.invited_id as ObjectId,
+      read: false,
+      notificationModel: 'list_invite',
+      notification: l._id
+    };
+    return notification;
+  });
+  const userNotifications = await UserNotificationModel.insertMany(notifications);
+  return userNotifications;
+};
+
+const makeUserInvFn = async (user: UserToken, list: TodoList, invited: ObjectId[]): Promise<TodoList> => {
+  //
+  const settings: UserSettings[] = await UserSettingsModel.find({_id: { $in: invited}});
+  const historyUpdate = { invited: {
+    date: Date.now(),
+    invites: invited,
+    invitedBy: new ObjectId(user.user_id)
+  }};
+  const without = invited.filter(i => settings.some(s => i.equals(s._id as ObjectId)));
+  const { accept, deny, invite } = settings.reduce((sorted: sortInvites, s) => {
+    if (Array.isArray(s?.privacy?.whitelisted)) {
+      if (s.privacy?.whitelisted.some(w => w.toString() === user.user_id)) {
+        return {
+          ...sorted,
+          accepted: sorted.accept.concat(s._id as ObjectId)
+        }
+      }
+    }
+    if (Array.isArray(s?.privacy?.blacklisted)) {
+      if (s.privacy?.blacklisted.some(b => b.toString() === user.user_id)) {
+        return {
+          ...sorted,
+          denied: sorted.deny.concat(s._id as ObjectId)
+        }
+      }
+    }
+    if (s?.privacy?.privacy === 'private') {
+      if (Array.isArray(s?.privacy?.allowed) && s.privacy.allowed.some(a => a.toString() === user.user_id)) {
+        return {
+          ...sorted,
+          toInvite: sorted.invite.concat(s._id as ObjectId)
+        };
+      } else {
+        return {
+          ...sorted,
+          deny: sorted.deny.concat(s._id as ObjectId)
+        }
+      }
+    }
+    return {
+      ...sorted,
+      invite: sorted.invite.concat(s._id as ObjectId)
+    };
+  }, {
+    deny: [], accept: [], invite: []
+  });
+
+  // TBD: do something with the denied?
+
+  const acceptUpdate = accept.length > 0 ? { shared: accept } : {}
+
+  const inviteAndNotify = invite.concat(without);
+  // Make invitations and send notifications
+  if ( inviteAndNotify.length > 0 ) {
+    inviteAndNotifyUsers(user, list, inviteAndNotify);
+  }
+  const updates = {
+    $push: {
+      ...historyUpdate,
+      ...acceptUpdate
+    }
+  };
+  const updated = await TodoListModel.findByIdAndUpdate(list._id, updates, { new: true });
+  return updated;
+};
+
+const makeUserInvitations = (user: UserToken, list: TodoList, invited: ObjectId[]): TE.TaskEither<HttpError, TodoList> => {
+  //
+  return pipe(
+    TE.tryCatch(
+      () => makeUserInvFn(user, list, invited) as Promise<TodoList>,
+      (reason) => internalError()
+    )
+  );
+};
+
+export const inviteByUsers = (user: UserToken, listId: string, invited: string[]): TE.TaskEither<HttpError, TodoList> => {
+  return pipe(
+    validateUsers(invited),
+    TE.fromEither,
+    TE.bindTo('invitedIds'),
+    TE.bind('list', () => getList(user, listId)),
+    TE.chain(({list, invitedIds}) => makeUserInvitations(user, list, invitedIds))
+  );
+};
+
+const validateUsername = (username: string): E.Either<HttpError, string> => {
+  return isUsername(username) ? E.right(username.slice(1)) : E.left(validationError());
+};
+
+const isUsername = (s: string) => {
+  return s.startsWith('@');
+};
+
+const validateEmail = (mail: string): E.Either<HttpError, string> => {
+  return isEmail(mail) ? E.right(mail) : E.left(validationError());
+};
+
+export const isEmail = (s: string) => {
+  return /^[^@]+@[^@]+$/.test(s);
+  // return /([!#-'*+/-9=?A-Z^-~-]+(\.[!#-'*+/-9=?A-Z^-~-]+)*|\"\(\[\]!#-[^-~ \t]|(\\[\t -~]))+\")@([!#-'*+/-9=?A-Z^-~-]+(\.[!#-'*+/-9=?A-Z^-~-]+)*|\[[\t -Z^-~]*])/.test(s);
+};
+
+/*
+async function inviteNotification(user: UserToken, list: ShoppingList, invited: User) {
+  console.log('creaiting invite, notification and updating list');
+  // createa list invite and a user notification
+  const invite = await ListInviteModel.create({
+    list_id: list._id,
+    inviting_id: new ObjectId(user.user_id),
+    invited_id: invited._id
+  });
+  console.log('invite created: ', invite);
+  const notification = await UserNotificationModel.create({
+    user_id: new ObjectId(invited._id),
+    notification: {
+      type: 'list_invite',
+      invite_id: invite._id,
+      inviting_user: {
+        name: user.name,
+        icon: user.icon
+      },
+      invited_list: {
+        name: list.name
+      }
+    }
+  });
+}
+*/

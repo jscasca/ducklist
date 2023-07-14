@@ -171,21 +171,25 @@ export interface UserSettings {
 }
 
 export interface ListInvite {
-  list_id: ShoppingList;
-  inviting_id: User;
-  invited_id: User;
+  list_id: TodoList | ObjectId;
+  list_name: string;
+  inviting: User;
+  invited_id?: User | ObjectId;
+  invited_mail?: string;
   _id?: ObjectId;
 }
 
 export interface BoardInvite {
   board_id: Board;
-  inviting_id: User;
-  invited_id: User;
+  inviting: User;
+  invited_id: User | ObjectId;
   _id?: ObjectId;
 }
 
 export interface UserNotification {
-  user_id: User;
+  user_id: User | ObjectId;
+  read: Boolean;
   notification: any;
+  notificationModel: string;
   _id?: ObjectId;
 }

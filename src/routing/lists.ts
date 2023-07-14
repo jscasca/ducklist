@@ -5,7 +5,7 @@ import * as E from "fp-ts/lib/Either";
 import { ValidationError } from '../exceptions';
 import { HttpError } from '../httpError';
 import { verifyToken } from '../middleware/auth';
-import { addListItem, finishList, getListItems, getLists, getList, inviteToList, newList, removeList, updateList, updateListItem, updateListItemStatus, updateItemAttributes } from '../middleware/lists';
+import { addListItem, finishList, getListItems, getLists, getList, newList, removeList, updateList, updateListItem, updateListItemStatus, updateItemAttributes, inviteByUsers } from '../middleware/lists';
 import { FinishedListDetails, TodoList, TodoListItem, UserToken } from '../types';
 import { handleException } from './exceptionHandler';
 import { pipe } from 'fp-ts/lib/function';
@@ -168,27 +168,38 @@ router.post('/', verifyToken, (req, res) => {
     )();
   });
 
-  router.post('/lists/:id/invite', verifyToken, (req, res) => {
+  router.post('/:id/invite/users', verifyToken, (req, res) => {
     const user = (req as any).user;
     const listId = req.params.id;
     const { invites } = req.body;
-    // [invites]
-    if (!(user && (invited_id || invited_name ))) {
-      return handleException(res, new ValidationError('Missing parameters'));
-    }
-    inviteToList(user, listId, invited_id, invited_name).then((updatedList) => {
-      return res.status(200).json(updatedList);
-    }).catch(e => {
-      return handleException(res, e);
-    });
+    pipe(
+      inviteByUsers(user, listId, invites),
+      TE.fold(
+        (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
+        (list: TodoList) => T.of(res.status(200).json(list))
+      )
+    )
   });
 
+  // router.post('/lists/:id/invite', verifyToken, (req, res) => {
+  //   const user = (req as any).user;
+  //   const listId = req.params.id;
+  //   const { invites } = req.body;
+  //   // [invites]
+  //   if (!(user && (invited_id || invited_name ))) {
+  //     return handleException(res, new ValidationError('Missing parameters'));
+  //   }
+  //   inviteToList(user, listId, invited_id, invited_name).then((updatedList) => {
+  //     return res.status(200).json(updatedList);
+  //   }).catch(e => {
+  //     return handleException(res, e);
+  //   });
+  // });
+
   router.post('/lists/:id/finish', verifyToken, (req, res) => {
-    //
     const user = (req as any).user;
     const listId = req.params.id;
     const { opts } = req.body;
-    //
     pipe(
       finishList(user, listId, opts),
       TE.fold(
