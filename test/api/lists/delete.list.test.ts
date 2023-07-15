@@ -13,7 +13,7 @@ import { addListItem, newList } from '../../../src/middleware/lists';
 import { TodoList, TodoListItem, UserToken } from '../../../src/types';
 import { ObjectId } from 'mongodb';
 
-import { getUserFromToken } from '../../authUtil';
+import { getUserFromToken } from '../../util';
 
 const TodoListModel = require('../../../src/models/todoList');
 const TodoListItemModel = require('../../../src/models/todoListItem');

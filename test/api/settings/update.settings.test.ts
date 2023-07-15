@@ -9,7 +9,7 @@ import { pipe } from "fp-ts/lib/function";
 import * as T from "fp-ts/lib/Task";
 import * as TE from "fp-ts/lib/TaskEither";
 import { registerUserByMail } from '../../../src/middleware/engine';
-import { getUserFromToken } from '../../authUtil';
+import { getUserFromToken } from '../../util';
 import { updateSettingsList } from '../../../src/middleware/settings';
 import { ObjectId } from 'mongodb';
 

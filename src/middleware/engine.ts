@@ -150,6 +150,7 @@ export async function registerUserByMail(name: string, mail: string, pass: strin
     name,
     icon: 'placeholder' // get from somewhere?
   });
+  // TODO: create settings object here
   // console.log(JSON.stringify(user));
   // console.log('creating login');
   const login = await EmailLoginModel.create({

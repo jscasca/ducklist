@@ -13,7 +13,7 @@ import { addListItem, newList, isEmail } from '../../../src/middleware/lists';
 import { ShoppingList, ShoppingListItem, UserToken, TodoList } from '../../../src/types';
 import { ObjectId } from 'mongodb';
 
-import { getUserFromToken } from '../../authUtil';
+import { getUserFromToken } from '../../util';
 import { doesNotMatch, fail } from 'assert';
 import { send } from 'process';
 
