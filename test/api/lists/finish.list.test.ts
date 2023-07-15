@@ -13,7 +13,7 @@ import { addListItem, newList, isEmail, updateListItem, updateListItemStatus } f
 import { FinishedListItem, FinishedShoppingList, ShoppingList, ShoppingListItem, UserToken, TodoList, TodoListItem } from '../../../src/types';
 import { ObjectId } from 'mongodb';
 
-import { getUserFromToken } from '../../authUtil';
+import { getUserFromToken } from '../../util';
 
 const TodoListModel = require('../../../src/models/todoList');
 const TodoListItemModel = require('../../../src/models/todoListItem');
@@ -212,69 +212,6 @@ describe('Finishing lists', () => {
         done();
       });
     });
-  
-    // it('Should finish a shared list', async() => {});
-    // it('Should finish a shared list and create a remaining one', async() => {
-    //   const req = await request(app)
-    //     .post(`/lists/${listA._id}/finish`)
-    //     .set('x-access-token', userAlice.token)
-    //     .send({opts: {pending: true}});
-    //   console.log('finished request');
-    //   const finishedId = req.body._id;
-
-    //   const list = await ShoppingListModel.findById(listA._id?.toString());
-    //   expect(list).to.not.exist;
-
-    //   const item1 = await ShoppingListItemModel.findById(uncheckedItem1._id);
-    //   expect(item1).to.exist;
-
-    //   const newList = await ShoppingListModel.findById(item1.list_id);
-    //   expect(newList).to.exist;
-    //   const newListItems: ShoppingListItem[] = await ShoppingListItemModel.find({list_id: newList._id});
-    //   expect(newListItems.length).to.eq(3);
-    //   newListItems.forEach(i => {
-    //     expect(i.status === 'pending');
-    //   });
-    //   expect(newList.name).to.eq('List A (2)');
-
-    //   const finished: FinishedShoppingList = await FinishedListModel.findById(finishedId);
-    //   expect(finished).to.exist;
-    //   console.log('finished: ', finished);
-
-    //   listA.shared.forEach(s => expect(finished.users.some(u => s.toString() === u.toString())).to.be.true);
-
-    // });
-
-    // it('Should finish a shared list and name the remaining one properly', async() => {
-    //   await ShoppingListModel.findByIdAndUpdate(listA._id, {$set: {name: 'List A (99)'}});
-    //   const req = await request(app)
-    //     .post(`/lists/${listA._id}/finish`)
-    //     .set('x-access-token', userAlice.token)
-    //     .send({opts: {pending: true}});
-    //   console.log('finished request');
-    //   const finishedId = req.body._id;
-
-    //   const list = await ShoppingListModel.findById(listA._id?.toString());
-    //   expect(list).to.not.exist;
-
-    //   const item1 = await ShoppingListItemModel.findById(uncheckedItem1._id);
-    //   expect(item1).to.exist;
-
-    //   const newList = await ShoppingListModel.findById(item1.list_id);
-    //   expect(newList).to.exist;
-    //   const newListItems: ShoppingListItem[] = await ShoppingListItemModel.find({list_id: newList._id});
-    //   expect(newListItems.length).to.eq(3);
-    //   newListItems.forEach(i => {
-    //     expect(i.status === 'pending');
-    //   });
-    //   expect(newList.name).to.eq('List A (100)');
-
-    //   const finished: FinishedShoppingList = await FinishedListModel.findById(finishedId);
-    //   expect(finished).to.exist;
-    //   console.log('finished: ', finished);
-
-    //   listA.shared.forEach(s => expect(finished.users.some(u => s.toString() === u.toString())).to.be.true);
-    // });
 
     // TBD: Other options for finishing lists
 
