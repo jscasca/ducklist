@@ -37,6 +37,7 @@ before('Connect to the DB', async () => {
   console.log('dropped');
   userAlice = await makeUser('alice');
   userBob = await makeUser('bob');
+  userCharlie = await makeUser('charlie');
   listA = await newListFn(userAlice, [userAlice, userBob]);
 });
 
@@ -56,9 +57,9 @@ describe('Sharing lists', () => {
 
     it('Should fail for missing parameters', (done) => {
       request(app)
-        .post(`/lists/${listA._id}/invite`)
+        .post(`/lists/${listA._id}/invite/users`)
         .set('x-access-token', userAlice.token)
-        .send({invited_x: '', invited_y: ''})
+        .send({invited: 'wrong params'})
         .expect(400)
         .end((err) => {
           if(err) return done(err);
@@ -66,11 +67,23 @@ describe('Sharing lists', () => {
         });
     });
 
-    it('Should fail for wrong id', (done) => {
+    it('Should fail for wrong incorrect id', (done) => {
       request(app)
-        .post(`/lists/wrongid/invite`)
+        .post(`/lists/wrongid/invite/users`)
         .set('x-access-token', userAlice.token)
-        .send({invited_name: 'ignored@test.com'})
+        .send({invites: ['123456789012']})
+        .expect(404)
+        .end((err) => {
+          if(err) return done(err);
+          done();
+        })
+    });
+
+    it('Should fail for wrong correct id', (done) => {
+      request(app)
+        .post(`/lists/123456789012/invite/users`)
+        .set('x-access-token', userAlice.token)
+        .send({invites: ['123456789012']})
         .expect(404)
         .end((err) => {
           if(err) return done(err);
@@ -82,7 +95,7 @@ describe('Sharing lists', () => {
       request(app)
         .post(`/lists/${listA._id}/invite`)
         .set('x-access-token', userCharlie.token)
-        .send({invited_name: 'ignored@test.com'})
+        .send({invites: ['123456789012']})
         .expect(403)
         .end((err) => {
           if(err) return done(err);
