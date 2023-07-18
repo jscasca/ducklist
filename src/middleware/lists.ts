@@ -540,6 +540,31 @@ const inviteAndNotifyUsers = async (user: UserToken, list: TodoList, invited: Ob
   return userNotifications;
 };
 
+interface Invitations {
+  emails: string[];
+  users: ObjectId[];
+}
+
+const makeInvitations = async (user: UserToken, list: TodoList, invited: (string|ObjectId)[]): Promise<TodoList> => {
+  const { emails, users } = invited.reduce((a: Invitations, i) => {
+    return i instanceof ObjectId ? {...a, users: a.users.concat(i)} : {...a, emails: a.emails.concat(i)};
+  }, { emails: [], users: []});
+  // Eail that have actual users
+  const logins: EmailLogin[] = emails.length > 0 ? await EmailLoginModel.find({ mail: { $in: emails } }) : [];
+  // Will have to email these one as they dont have an account
+  const emailOnly = emails.filter(e => logins.every(l => l.mail !== e));
+  // All the users invited (they have accounts)
+  const usersToInvite = logins.map(l => new ObjectId(l.user_id)).concat(users);
+  const settings: UserSettings[] = await UserSettingsModel.find({ _id: { $in: usersToInvite } });
+  // Update history here?
+  const historyUpdate = {};
+  // users without settings
+  const without = usersToInvite.filter(i => settings.some(s => i.equals(s._id as ObjectId)));
+  // separate users with settings
+  const { accept, deny, invite } = settings.reduce(() => {}, {});
+  return list;
+};
+
 const makeUserInvFn = async (user: UserToken, list: TodoList, invited: ObjectId[]): Promise<TodoList> => {
   //
   const settings: UserSettings[] = await UserSettingsModel.find({_id: { $in: invited}});
@@ -623,6 +648,25 @@ export const inviteByUsers = (user: UserToken, listId: string, invited: string[]
     TE.bindTo('invitedIds'),
     TE.bind('list', () => getList(user, listId)),
     TE.chain(({list, invitedIds}) => makeUserInvitations(user, list, invitedIds))
+  );
+};
+
+const validateInvitations = (invited: string[]): E.Either<HttpError, (string|ObjectId)[]> => {
+  if (!Array.isArray(invited)) return E.left(validationError());
+  return E.right(invited.filter(i => ObjectId.isValid(i) || isEmail(i)).map(i => ObjectId.isValid(i) ? new ObjectId(i) : i));
+};
+
+export const inviteToList = (user: UserToken, listId: string, invited: string[]) => {
+  return pipe(
+    validateInvitations(invited),
+    TE.fromEither,
+    TE.bindTo('invitations'),
+    TE.bind('list', () => getList(user, listId)),
+    TE.chain(({list, invitations}) => TE.tryCatch(
+        () => makeInvitations(user, list, invitations),
+        (reason) => internalError()
+      )
+    )
   );
 };
 

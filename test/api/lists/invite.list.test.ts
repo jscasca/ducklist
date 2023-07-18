@@ -10,7 +10,7 @@ import { addListItem, newList, isEmail } from '../../../src/middleware/lists';
 import { ShoppingList, ShoppingListItem, UserToken } from '../../../src/types';
 import { ObjectId } from 'mongodb';
 
-import { getUserFromToken } from '../../util';
+import { getUserFromToken, makeUser, newListFn } from '../../util';
 import { doesNotMatch, fail } from 'assert';
 import { send } from 'process';
 
@@ -35,14 +35,9 @@ before('Connect to the DB', async () => {
   const con = await connect();
   await con.connection.db.dropDatabase();
   console.log('dropped');
-  userAlice = await registerUserByMail('Alice', 'alice@test.com', 'alice');
-  userBob = await registerUserByMail('Bob', 'bob@test.com', 'bob');
-  userCharlie = await registerUserByMail('Charlie', 'charlie@test.com', 'charlie');
-  listA = await newList(getUserFromToken(userAlice.token), 'list a', [userAlice.user_id as string]);
-  privateUser = await registerUserByMail('Private', 'private@test.com', 'private');
-
-  console.log('created list: ', listA);
-  // console.log('Saved settings: ', privateSettings);
+  userAlice = await makeUser('alice');
+  userBob = await makeUser('bob');
+  listA = await newListFn(userAlice, [userAlice, userBob]);
 });
 
 describe('Sharing lists', () => {
@@ -50,7 +45,7 @@ describe('Sharing lists', () => {
   describe('Fail on wrong calls', () => {
     it('Should fail for missing headers', (done) => {
       request(app)
-        .post(`/lists/${listA._id}/invite`)
+        .post(`/lists/${listA._id}/invite/users`)
         .send({})
         .expect(401)
         .end((err) => {
