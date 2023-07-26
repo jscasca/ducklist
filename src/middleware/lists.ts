@@ -344,6 +344,26 @@ export const updateListItemStatus = (user: UserToken, itemId: string, newStatus:
   );
 }
 
+interface CountValues {
+  _id: 'pending' | 'checked' | 'deleted' | 'unknown';
+  itemCount: number;
+}
+
+// TODO: Clear this
+export const updateListStatusCount = async (listId: any) => {
+  const values: CountValues[] = await TodoListItemModel.aggregate().
+   match({ list_id: listId }).
+   group({ _id: '$status', itemCount: { $count: {}}});
+  const checked = (values.find(v => v._id === 'checked') ?? { itemCount: 0}).itemCount;
+  const total = checked + (values.find(v => v._id === 'pending') ?? {itemCount: 0}).itemCount;
+  try{
+  const s = await TodoListModel.findByIdAndUpdate(listId, { $set: { 'meta.total': total, 'meta.checked': checked}}, {new: true});
+  // console.log('done updating; ', s);
+  } catch(e) {
+    console.error(e);
+  }
+};
+
 export async function updateListItemNotes(user: UserToken, itemId: string, notes: any) {
   // validate notes?
   const updatedItem = await TodoListItemModel.findByIdAndUpdate(

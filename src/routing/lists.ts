@@ -5,7 +5,7 @@ import * as E from "fp-ts/lib/Either";
 import { ValidationError } from '../exceptions';
 import { HttpError } from '../httpError';
 import { verifyToken } from '../middleware/auth';
-import { addListItem, finishList, getListItems, getLists, getList, newList, removeList, updateList, updateListItem, updateListItemStatus, updateItemAttributes, inviteByUsers } from '../middleware/lists';
+import { addListItem, finishList, getListItems, getLists, getList, newList, removeList, updateList, updateListItem, updateListItemStatus, updateItemAttributes, inviteByUsers, updateListStatusCount } from '../middleware/lists';
 import { FinishedListDetails, TodoList, TodoListItem, UserToken } from '../types';
 import { handleException } from './exceptionHandler';
 import { pipe } from 'fp-ts/lib/function';
@@ -121,7 +121,10 @@ router.post('/', verifyToken, (req, res) => {
       addListItem(user, listId, newItem),
       TE.fold(
         (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
-        (item: TodoListItem) => T.of(res.status(200).json(item))
+        (item: TodoListItem) => {
+          updateListStatusCount(item.list_id);
+          return T.of(res.status(200).json(item))
+        }
       )
     )();
   });
@@ -148,6 +151,7 @@ router.post('/', verifyToken, (req, res) => {
         },
         (item: TodoListItem) => {
           // console.log('returning: ', item);
+          updateListStatusCount(item.list_id);
           return T.of(res.status(200).json(item));
         }
       )

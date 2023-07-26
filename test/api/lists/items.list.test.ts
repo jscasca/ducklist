@@ -184,6 +184,19 @@ describe('Items', () => {
       });
     });
 
+    it('Should update the list metadata accordingly', async () => {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const listReq = await request(app)
+        .get('/lists')
+        .set('x-access-token', userAlice.token)
+        .expect(200);
+      const lists = listReq.body;
+      const lista = lists.find((l: TodoListItem) => listA._id?.equals(l._id as ObjectId));
+      expect(lista).to.exist;
+      expect(lista).to.have.nested.property('meta.total', 2);
+      expect(lista).to.have.nested.property('meta.checked', 0);
+    });
+
     it('Should fail for incorrect status', (done) => {
       request(app)
       .put(`/lists/items/${itemId}/status`)
@@ -209,6 +222,19 @@ describe('Items', () => {
         expect(updated).to.have.deep.property('name', itemName);
         done();
       });
+    });
+
+    it('Should update the list metadata accordingly', async () => {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const listReq = await request(app)
+        .get('/lists')
+        .set('x-access-token', userAlice.token)
+        .expect(200);
+      const lists = listReq.body;
+      const lista = lists.find((l: TodoListItem) => listA._id?.equals(l._id as ObjectId));
+      expect(lista).to.exist;
+      expect(lista).to.have.nested.property('meta.total', 2);
+      expect(lista).to.have.nested.property('meta.checked', 1);
     });
 
     it('Should return item with updated attributes and timestamp', (done) => {
@@ -252,6 +278,30 @@ describe('Items', () => {
       });
     });
 
+    it('Should delete an item by updaing the status', async () => {
+      const itemRes = await request(app)
+      .put(`/lists/items/${itemId}/status`)
+      .set('x-access-token', userAlice.token)
+      .send({status: 'deleted'})
+      .expect(200);
+      const item = itemRes.body;
+      expect(item).to.have.deep.property('status', 'deleted');
+    });
+
+
+    it('Should update the list metadata accordingly', async () => {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const listReq = await request(app)
+        .get('/lists')
+        .set('x-access-token', userAlice.token)
+        .expect(200);
+      const lists = listReq.body;
+      const lista = lists.find((l: TodoListItem) => listA._id?.equals(l._id as ObjectId));
+      expect(lista).to.exist;
+      expect(lista).to.have.nested.property('meta.total', 1);
+      expect(lista).to.have.nested.property('meta.checked', 0);
+    });
+
   });
 
 });
@@ -259,3 +309,4 @@ describe('Items', () => {
 after('Disconnect', () => {
   disconnect();
 });
+
