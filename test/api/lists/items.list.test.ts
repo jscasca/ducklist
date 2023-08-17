@@ -302,6 +302,10 @@ describe('Items', () => {
       expect(lista).to.have.nested.property('meta.checked', 0);
     });
 
+    // TBD: Test after updating asignee
+
+    // TBD: Test after upadting due date
+
   });
 
 });
