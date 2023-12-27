@@ -4,8 +4,7 @@ import { ListInvite } from '../types';
 
 const schema = new Schema<ListInvite>({
   list_id: {type: ObjectId, ref: 'todo_list', required: true},
-  list_name: { type: String },
-  inviting: {},
+  inviting_id: { type: ObjectId, ref: 'user'},
   invited_id: {type: ObjectId, ref: 'user'},
   invited_mail: { type: String }
 });

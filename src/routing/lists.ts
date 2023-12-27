@@ -5,7 +5,7 @@ import * as E from "fp-ts/lib/Either";
 import { ValidationError } from '../exceptions';
 import { HttpError } from '../httpError';
 import { verifyToken } from '../middleware/auth';
-import { addListItem, finishList, getListItems, getLists, getList, newList, removeList, updateList, updateListItem, updateListItemStatus, updateItemAttributes, inviteByUsers, updateListStatusCount } from '../middleware/lists';
+import { addListItem, finishList, getListItems, getLists, getList, newList, removeList, updateList, updateListItem, updateListItemStatus, updateItemAttributes, inviteByUsers, updateListStatusCount, inviteToList } from '../middleware/lists';
 import { FinishedListDetails, TodoList, TodoListItem, UserToken } from '../types';
 import { handleException } from './exceptionHandler';
 import { pipe } from 'fp-ts/lib/function';
@@ -177,7 +177,7 @@ router.post('/', verifyToken, (req, res) => {
     const listId = req.params.id;
     const { invites } = req.body;
     pipe(
-      inviteByUsers(user, listId, invites),
+      inviteToList(user, listId, invites),
       TE.fold(
         (e: HttpError) => T.of(res.status(e.code()).send(e.message())),
         (list: TodoList) => T.of(res.status(200).json(list))

@@ -6,6 +6,7 @@ import { ObjectId } from "mongodb";
 import { ElementNotFoundException, UserAccessException, ValidationError } from "../exceptions";
 import { HttpError, internalError, notFound, userAccess, validationError } from "../httpError";
 import { EmailLogin, FinishedListDetails, FinishedTodoList, List, ListInvite, ShoppingList, ShoppingListItem, TodoList, TodoListItem, User, UserNotification, UserSettings, UserToken } from "../types";
+import { set } from "fp-ts";
 
 const UserModel = require('../models/user');
 const ListInviteModel = require('../models/listInvite');
@@ -535,13 +536,11 @@ interface sortInvites {
 
 const inviteAndNotifyUsers = async (user: UserToken, list: TodoList, invited: ObjectId[]): Promise<void> => {
   // make the invites
-  const userFull = UserModel.findById(new ObjectId(user.user_id));
-  const invites = invited.map(u => {
+  const invites = invited.map(i => {
     const invite: ListInvite = {
       list_id: list._id as ObjectId,
-      list_name: list.name,
-      inviting: userFull,
-      invited_id: u
+      inviting_id: new ObjectId(user.user_id),
+      invited_id: i
     };
     return invite;
   });
@@ -550,14 +549,32 @@ const inviteAndNotifyUsers = async (user: UserToken, list: TodoList, invited: Ob
   const notifications = listInvites.map(l => {
     const notification: UserNotification = {
       user_id: l.invited_id as ObjectId,
-      read: false,
-      notificationModel: 'list_invite',
-      notification: l._id
+      actor_id: new ObjectId(user.user_id),
+      entity: 'list',
+      action: 'invite',
+      notification: {
+        list_id: list._id,
+        list_name: list.name,
+        invite: l._id
+      }
     };
     return notification;
   });
   const userNotifications = await UserNotificationModel.insertMany(notifications);
-  return userNotifications;
+  // for each check device and send push notifications?
+};
+
+const inviteAndNotifyEmails = async (user: UserToken, list: TodoList, invited: string[]) => {
+  const invites = invited.map(i => {
+    const invite: ListInvite = {
+      list_id: list._id as ObjectId,
+      inviting_id: new ObjectId(user.user_id),
+      invited_mail: i
+    };
+    return invite;
+  });
+  ListInviteModel.insertMany(invites) as ListInvite[];
+  // TODO: Send invitation by email: Look into email. Send invite ID
 };
 
 interface Invitations {
@@ -577,98 +594,44 @@ const makeInvitations = async (user: UserToken, list: TodoList, invited: (string
   const usersToInvite = logins.map(l => new ObjectId(l.user_id)).concat(users);
   const settings: UserSettings[] = await UserSettingsModel.find({ _id: { $in: usersToInvite } });
   // Update history here?
-  const historyUpdate = {};
+  // const historyUpdate = { invited: {
+  //   date: Date.now(),
+  //   invites: invited,
+  //   invitedBy: new ObjectId(user.user_id)
+  // }};
   // users without settings
   const without = usersToInvite.filter(i => settings.some(s => i.equals(s._id as ObjectId)));
-  // separate users with settings
-  const { accept, deny, invite } = settings.reduce(() => {}, {});
-  return list;
-};
-
-const makeUserInvFn = async (user: UserToken, list: TodoList, invited: ObjectId[]): Promise<TodoList> => {
-  //
-  const settings: UserSettings[] = await UserSettingsModel.find({_id: { $in: invited}});
-  const historyUpdate = { invited: {
-    date: Date.now(),
-    invites: invited,
-    invitedBy: new ObjectId(user.user_id)
-  }};
-  const without = invited.filter(i => settings.some(s => i.equals(s._id as ObjectId)));
-  const { accept, deny, invite } = settings.reduce((sorted: sortInvites, s) => {
-    if (Array.isArray(s?.privacy?.whitelisted)) {
-      if (s.privacy?.whitelisted.some(w => w.toString() === user.user_id)) {
-        return {
-          ...sorted,
-          accepted: sorted.accept.concat(s._id as ObjectId)
-        }
-      }
-    }
-    if (Array.isArray(s?.privacy?.blacklisted)) {
-      if (s.privacy?.blacklisted.some(b => b.toString() === user.user_id)) {
-        return {
-          ...sorted,
-          denied: sorted.deny.concat(s._id as ObjectId)
-        }
-      }
-    }
-    if (s?.privacy?.privacy === 'private') {
-      if (Array.isArray(s?.privacy?.allowed) && s.privacy.allowed.some(a => a.toString() === user.user_id)) {
-        return {
-          ...sorted,
-          toInvite: sorted.invite.concat(s._id as ObjectId)
-        };
-      } else {
-        return {
-          ...sorted,
-          deny: sorted.deny.concat(s._id as ObjectId)
-        }
-      }
-    }
-    return {
-      ...sorted,
-      invite: sorted.invite.concat(s._id as ObjectId)
-    };
-  }, {
-    deny: [], accept: [], invite: []
+  // separate users with 
+  const toDeny = settings.filter((s) => {
+    return Array.isArray(s?.privacy?.blacklisted) &&
+      ( s.privacy?.blacklisted.some((b) => b.toString() === user.user_id) ||
+      s.privacy?.privacy && (Array.isArray(s?.privacy?.allowed) && !s.privacy.allowed.some(a => a.toString() === user.user_id)));
   });
-
-  // TBD: do something with the denied?
-
-  const acceptUpdate = accept.length > 0 ? { shared: accept } : {}
-
-  const inviteAndNotify = invite.concat(without);
-  // Make invitations and send notifications
-  if ( inviteAndNotify.length > 0 ) {
-    inviteAndNotifyUsers(user, list, inviteAndNotify);
+  const toAccept = settings.filter(s => toDeny.every(d => d._id !== s._id)).filter(s => {
+    return Array.isArray(s?.privacy?.whitelisted) &&
+      s.privacy?.whitelisted.some(w => w.toString() === user.user_id);
+  });
+  // Everything that doesn't accept or gets invited get denied by default
+  // const deny = settings.filter((s) => Array.isArray(s?.privacy?.blacklisted) && s.privacy?.blacklisted.some(b => b.toString() === user.user_id));
+  const toInvite = settings.filter(s => toDeny.every(d => d._id !== s._id)).filter(s => toAccept.every(a => a._id !== s._id)).map(s => s._id as ObjectId).concat(without);
+  // const updated = await TodoListModel.findByIdAndUpdate(list._id, updates, { new: true }).populate('shared');
+  // Make invitations for toInvite
+  if (toInvite.length > 0) {
+    inviteAndNotifyUsers(user, list, toInvite)
   }
-  const updates = {
-    $push: {
-      ...historyUpdate,
-      ...acceptUpdate
-    }
-  };
-  const updated = await TodoListModel.findByIdAndUpdate(list._id, updates, { new: true });
-  return updated;
-};
-
-const makeUserInvitations = (user: UserToken, list: TodoList, invited: ObjectId[]): TE.TaskEither<HttpError, TodoList> => {
-  //
-  return pipe(
-    TE.tryCatch(
-      () => makeUserInvFn(user, list, invited) as Promise<TodoList>,
-      (reason) => internalError()
-    )
-  );
-};
-
-export const inviteByUsers = (user: UserToken, listId: string, invited: string[]): TE.TaskEither<HttpError, TodoList> => {
-  return pipe(
-    validateUsers(invited),
-    TE.fromEither,
-    TE.bindTo('invitedIds'),
-    TE.bind('list', () => getList(user, listId)),
-    TE.chain(({list, invitedIds}) => makeUserInvitations(user, list, invitedIds))
-  );
+  // Send emails for emailOnly
+  if (emailOnly.length > 0) {
+    inviteAndNotifyEmails(user, list, emailOnly);
+  }
+  if (toAccept.length > 0) {
+    const updates = {
+      $push: { 'invited': toAccept.map(a => a._id) }
+    };
+    const updated = await TodoListModel.findByIdAndUpdate(list._id, updates, { new: true});
+    return updated;
+  } else {
+    return list;
+  }
 };
 
 const validateInvitations = (invited: string[]): E.Either<HttpError, (string|ObjectId)[]> => {
@@ -676,6 +639,13 @@ const validateInvitations = (invited: string[]): E.Either<HttpError, (string|Obj
   return E.right(invited.filter(i => ObjectId.isValid(i) || isEmail(i)).map(i => ObjectId.isValid(i) ? new ObjectId(i) : i));
 };
 
+/**
+ * inviteToList take an array of string (emails and user Ids) to invite those elements to participate in a list
+ * @param user UserToken logged user making the invitations
+ * @param listId List Id in string from path
+ * @param invited Array of emails and user Ids
+ * @returns Either<HttpError, Updated TodoList>
+ */
 export const inviteToList = (user: UserToken, listId: string, invited: string[]) => {
   return pipe(
     validateInvitations(invited),

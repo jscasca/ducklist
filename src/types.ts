@@ -172,8 +172,7 @@ export interface UserSettings {
 
 export interface ListInvite {
   list_id: TodoList | ObjectId;
-  list_name: string;
-  inviting: User;
+  inviting_id: User | ObjectId;
   invited_id?: User | ObjectId;
   invited_mail?: string;
   _id?: ObjectId;
@@ -188,8 +187,10 @@ export interface BoardInvite {
 
 export interface UserNotification {
   user_id: User | ObjectId;
-  read: Boolean;
+  actor_id: User | ObjectId;
+  read?: Date | null;
   notification: any;
-  notificationModel: string;
+  entity: string;
+  action: string;
   _id?: ObjectId;
 }
