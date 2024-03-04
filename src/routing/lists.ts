@@ -221,6 +221,22 @@ router.post('/', verifyToken, (req, res) => {
     const user = (req as any).user;
   });
 
+  router.post('/invite/:id/accept', verifyToken, (req, res) => {
+    const user = (req as any).user;
+    const { opts } = req.body; // accept: true/false, forAll: true/false
+    pipe(
+
+    )();
+  });
+
+  router.post('/invite/:id/deny', verifyToken, (req, res) => {
+    const user = (req as any).user;
+    const { opts } = req.body; // accept: true/false, forAll: true/false
+    pipe(
+
+    )();
+  });
+
 export {
   router
 }

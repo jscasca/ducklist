@@ -430,6 +430,7 @@ const finishFn = async (list: TodoList, user: UserToken, opts: any): Promise<Fin
   }
   const removedItems = await TodoListItemModel.deleteMany({list_id: list._id});
   const removedList = await TodoListModel.findByIdAndDelete(list._id);
+  // TODO: Make ssure anything related to taht list gets removed: invitations, etc....
   return {
     finished: {
       archive: finishedList._id?.toString(),
@@ -485,6 +486,36 @@ export const removeList = (user: UserToken, listId: string, opts: Record<string,
     })
   )
 }
+
+const getInvitation = (user: UserToken, invitationId: string): TE.TaskEither<HttpError, ListInvite> => {
+  return pipe(
+    isValidId(invitationId),
+    TE.fromEither,
+    TE.chain((id: string) => TE.tryCatch(
+      () => ListInviteModel.findById(new ObjectId(id)) as Promise<ListInvite>,
+      (reason) => internalError()
+    )),
+    TE.chain((invite: ListInvite) => invite === null ? TE.left(notFound()) : TE.right(invite)),
+    TE.chain((invite: ListInvite) => (invite.invited_id?.toString() === user.user_id) ? TE.left(userAccess()) : TE.right(invite))
+  )
+}
+
+export const acceptInvitation = async (user: UserToken, inviteId: string, opts: any) => {
+  //
+  return pipe(
+    getInvitation(user, inviteId),
+    // add user to list
+    TE.bindTo('invite'),
+    // Update TodoList with the new member
+    TE.chain(({ invite }) =>)
+    // delete invitation
+    // return upadted list
+  );
+}
+
+export const denyInvitation = async (user: UserToken, inviteId: string, opts: any) => {
+  //
+};
 
 export async function acceptInvite(user: UserToken, invite_id: string) {
   //
